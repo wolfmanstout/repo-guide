@@ -8,9 +8,7 @@ def cli():
 
 
 @cli.command(name="command")
-@click.argument(
-    "example"
-)
+@click.argument("example")
 @click.option(
     "-o",
     "--option",
