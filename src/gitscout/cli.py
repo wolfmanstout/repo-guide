@@ -1,5 +1,6 @@
 import os
 import shutil
+import textwrap
 from datetime import datetime
 from pathlib import Path
 
@@ -60,7 +61,7 @@ class DocGenerator:
     def generate_changelog(self, changes):
         # Start a conversation for maintaining context
         response = self.model.prompt(
-            """Generate a detailed changelog entry for the following git commits. 
+            """Generate a detailed changelog entry for the following git commits.
             Focus on user-facing changes and group similar changes together.
             Format the output in markdown with appropriate headers and bullet points.
 
@@ -87,24 +88,33 @@ class DocGenerator:
             files = [root / Path(f) for f in files]
             files = [f for f in files if str(f.resolve()) in all_files]
             dir_list = "\n".join(str(d) for d in dirs)
-            # fmt: off
-            file_contents = "\n".join(
-                f"{f}\n"
-                f"---\n"
-                f"{f.read_text()}\n"
-                f"---\n"
-                for f in files
+            file_template = textwrap.dedent(
+                """\
+                {path}
+                ---
+                {content}
+
+                ---
+                """
             )
-            # fmt: on
-            response = conversation.prompt(
-                f"""Directory: {root}
+            file_contents = "".join(
+                file_template.format(path=f, content=f.read_text()) for f in files
+            )
+            prompt_template = textwrap.dedent(
+                """\
+                Directory: {root}
 
                 Subdirectories:
                 {dir_list}
 
                 Files:
                 {file_contents}
-                """,
+                """
+            )
+            response = conversation.prompt(
+                prompt_template.format(
+                    root=root, dir_list=dir_list, file_contents=file_contents
+                ),
                 system="Provide an overview of what this directory does, including a summary of each subdirectory and file.",
             )
 
@@ -121,7 +131,16 @@ def serve_docs():
 
     for md_file in docs_path.glob("**/*.md"):
         content = md_file.read_text()
-        all_content.append(f"{md_file}\n---\n{content}\n\n---")
+        file_template = textwrap.dedent(
+            """\
+            {path}
+            ---
+            {content}
+
+            ---
+            """
+        )
+        all_content.append(file_template.format(path=md_file, content=content))
 
     html = markdown("\n\n".join(all_content))
 
