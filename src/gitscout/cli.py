@@ -100,43 +100,55 @@ class DocGenerator:
             for d in Path(f).parents
             if d.is_relative_to(resolved_repo_path)
         )
-        conversation = self.model.conversation()
+        generated_readmes = {}
         for root, dirs, files in os.walk(self.repo_path, topdown=False):
             root = Path(root)
             if str(root.resolve()) not in all_directories:
                 continue
+
             dirs = [root / Path(d) for d in dirs]
             dirs = [d for d in dirs if str(d.resolve()) in all_directories]
             files = [root / Path(f) for f in files]
             files = [f for f in files if str(f.resolve()) in all_files]
-            dir_list = "\n".join(str(d) for d in dirs)
-            file_template = textwrap.dedent(
-                """\
-                {path}
-                ---
-                {content}
 
-                ---
-                """
-            )
-            file_contents = "".join(
-                file_template.format(path=f, content=f.read_text()) for f in files
-            )
-            prompt_template = textwrap.dedent(
-                """\
-                Directory: {root}
+            # Get READMEs from all subdirectories
+            readme_context = ""
+            for subdir, content in generated_readmes.items():
+                if subdir != root and subdir.is_relative_to(root):
+                    rel_path = subdir.relative_to(self.repo_path) / "README.md"
+                    readme_context += f"\n{rel_path}:\n"
+                    readme_context += content
+                    readme_context += "\n---\n"
 
-                Subdirectories:
-                {dir_list}
+            prompt_parts = [f"Directory: {root}"]
 
-                Files:
-                {file_contents}
-                """
-            )
-            response = conversation.prompt(
-                prompt_template.format(
-                    root=root, dir_list=dir_list, file_contents=file_contents
-                ),
+            if dirs:
+                dir_list = "\n".join(str(d) for d in dirs)
+                prompt_parts.append(f"Subdirectories:\n{dir_list}")
+
+            if files:
+                file_template = textwrap.dedent(
+                    """\
+                    {path}
+                    ---
+                    {content}
+
+                    ---
+                    """
+                )
+                file_contents = "".join(
+                    file_template.format(path=f, content=f.read_text()) for f in files
+                )
+                prompt_parts.append(f"Files:\n{file_contents}")
+
+            if readme_context:
+                prompt_parts.append(
+                    f"Previously generated documentation:\n{readme_context}"
+                )
+
+            prompt = "=====\n\n".join(prompt_parts)
+            response = self.model.prompt(
+                prompt,
                 system="Provide an overview of what this directory does in Markdown, including a summary of each subdirectory and file.",
             )
 
@@ -147,6 +159,9 @@ class DocGenerator:
             output_path = Path("generated_docs") / root / "README.md"
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(response.text())
+
+            # Store the generated README
+            generated_readmes[root] = response.text()
 
 
 @app.route("/")
