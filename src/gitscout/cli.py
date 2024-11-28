@@ -155,7 +155,10 @@ def serve_docs():
             """
         )
         all_content.append(
-            file_template.format(path=escape_markdown(str(md_file)), content=content)
+            file_template.format(
+                path=escape_markdown(str(md_file.relative_to(docs_path))),
+                content=content,
+            )
         )
 
     html = markdown("\n\n".join(all_content))
