@@ -23,10 +23,14 @@ def escape_markdown(text):
 
 
 class DocGenerator:
-    def __init__(self, repo_path: str, model_name: str | None = None):
+    def __init__(
+        self, repo_path: str, model_name: str | None = None, count_tokens: bool = False
+    ):
         self.repo_path = Path(repo_path)
         self.repo = git.Repo(repo_path)
         self.model = llm.get_model(model_name) if model_name else llm.get_model()
+        self.count_tokens = count_tokens
+        self.total_tokens = 0
 
     def get_recent_changes(self, num_commits=5):
         commits = list(self.repo.iter_commits("main", max_count=num_commits))
@@ -78,6 +82,10 @@ class DocGenerator:
             + str(changes),
             system="You are a technical writer creating clear, organized changelog entries.",
         )
+
+        if self.count_tokens:
+            self.total_tokens += response.usage().input or 0
+            self.total_tokens += response.usage().output or 0
 
         return response.text()
 
@@ -131,6 +139,10 @@ class DocGenerator:
                 ),
                 system="Provide an overview of what this directory does in Markdown, including a summary of each subdirectory and file.",
             )
+
+            if self.count_tokens:
+                self.total_tokens += response.usage().input or 0
+                self.total_tokens += response.usage().output or 0
 
             output_path = Path("generated_docs") / root / "README.md"
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -198,7 +210,12 @@ def serve_docs():
 )
 @click.option("--port", default=5000, help="Port for local server")
 @click.option("--gen/--no-gen", default=True, help="Generate documentation")
-def cli(repo_path: str, model: str, serve: bool, port: int, gen: bool):
+@click.option(
+    "--count-tokens/--no-count-tokens", default=False, help="Count tokens used"
+)
+def cli(
+    repo_path: str, model: str, serve: bool, port: int, gen: bool, count_tokens: bool
+):
     "Uses AI to help understand repositories and their changes."
     generated_docs_path = Path("generated_docs")
 
@@ -208,7 +225,7 @@ def cli(repo_path: str, model: str, serve: bool, port: int, gen: bool):
             shutil.rmtree(generated_docs_path)
         generated_docs_path.mkdir()
 
-        generator = DocGenerator(repo_path, model)
+        generator = DocGenerator(repo_path, model, count_tokens)
 
         # Generate documentation
         generator.generate_docs()
@@ -218,6 +235,9 @@ def cli(repo_path: str, model: str, serve: bool, port: int, gen: bool):
         changelog = generator.generate_changelog(changes)
 
         Path("generated_docs/CHANGELOG.md").write_text(changelog)
+
+        if count_tokens:
+            click.echo(f"Total tokens used: {generator.total_tokens:,}")
     else:
         # Ensure the docs directory exists when serving
         if serve and not generated_docs_path.exists():
