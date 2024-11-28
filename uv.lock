@@ -133,7 +133,7 @@ dependencies = [
     { name = "gitpython" },
     { name = "llm" },
     { name = "llm-gemini" },
-    { name = "mistune" },
+    { name = "mistletoe" },
 ]
 
 [package.dev-dependencies]
@@ -148,7 +148,7 @@ requires-dist = [
     { name = "gitpython", specifier = ">=3.1.43" },
     { name = "llm", specifier = ">=0.18" },
     { name = "llm-gemini", specifier = ">=0.4.2" },
-    { name = "mistune", specifier = ">=3.0.2" },
+    { name = "mistletoe", specifier = ">=1.4.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -392,12 +392,12 @@ wheels = [
 ]
 
 [[package]]
-name = "mistune"
-version = "3.0.2"
+name = "mistletoe"
+version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ef/c8/f0173fe3bf85fd891aee2e7bcd8207dfe26c2c683d727c5a6cc3aec7b628/mistune-3.0.2.tar.gz", hash = "sha256:fc7f93ded930c92394ef2cb6f04a8aabab4117a91449e72dcc8dfa646a508be8", size = 90840 }
+sdist = { url = "https://files.pythonhosted.org/packages/11/96/ea46a376a7c4cd56955ecdfff0ea68de43996a4e6d1aee4599729453bd11/mistletoe-1.4.0.tar.gz", hash = "sha256:1630f906e5e4bbe66fdeb4d29d277e2ea515d642bb18a9b49b136361a9818c9d", size = 107203 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f0/74/c95adcdf032956d9ef6c89a9b8a5152bf73915f8c633f3e3d88d06bd699c/mistune-3.0.2-py3-none-any.whl", hash = "sha256:71481854c30fdbc938963d3605b72501f5c10a9320ecd412c121c163a1c7d205", size = 47958 },
+    { url = "https://files.pythonhosted.org/packages/2a/0f/b5e545f0c7962be90366af3418989b12cf441d9da1e5d89d88f2f3e5cf8f/mistletoe-1.4.0-py3-none-any.whl", hash = "sha256:44a477803861de1237ba22e375c6b617690a31d2902b47279d1f8f7ed498a794", size = 51304 },
 ]
 
 [[package]]

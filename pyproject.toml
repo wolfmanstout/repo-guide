@@ -14,7 +14,7 @@ dependencies = [
     "gitpython>=3.1.43",
     "llm-gemini>=0.4.2",
     "llm>=0.18",
-    "mistune>=3.0.2",
+    "mistletoe>=1.4.0",
 ]
 
 [build-system]

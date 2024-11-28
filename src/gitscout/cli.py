@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import textwrap
 from datetime import datetime
@@ -7,11 +8,18 @@ from pathlib import Path
 import click
 import git
 import llm
-import mistune
 from flask import Flask, render_template_string
+from mistletoe import markdown
 
 app = Flask(__name__)
-markdown = mistune.create_markdown()
+
+
+def escape_markdown(text):
+    # List of characters to escape in Markdown
+    markdown_chars = r"[\`\*\_\{\}\[\]\(\)\#\+\-\.\!]"
+    # Escape each character by prefixing it with a backslash
+    escaped_text = re.sub(markdown_chars, r"\\\g<0>", text)
+    return escaped_text
 
 
 class DocGenerator:
@@ -77,7 +85,13 @@ class DocGenerator:
         all_files = set(
             str(Path(f).resolve()) for f in self.repo.git.ls_files().splitlines()
         )
-        all_directories = set(str(Path(f).parent) for f in all_files)
+        resolved_repo_path = self.repo_path.resolve()
+        all_directories = set(
+            str(d)
+            for f in all_files
+            for d in Path(f).parents
+            if d.is_relative_to(resolved_repo_path)
+        )
         conversation = self.model.conversation()
         for root, dirs, files in os.walk(self.repo_path, topdown=False):
             root = Path(root)
@@ -115,7 +129,7 @@ class DocGenerator:
                 prompt_template.format(
                     root=root, dir_list=dir_list, file_contents=file_contents
                 ),
-                system="Provide an overview of what this directory does, including a summary of each subdirectory and file.",
+                system="Provide an overview of what this directory does in Markdown, including a summary of each subdirectory and file.",
             )
 
             output_path = Path("generated_docs") / root / "README.md"
@@ -140,7 +154,9 @@ def serve_docs():
             ---
             """
         )
-        all_content.append(file_template.format(path=md_file, content=content))
+        all_content.append(
+            file_template.format(path=escape_markdown(str(md_file)), content=content)
+        )
 
     html = markdown("\n\n".join(all_content))
 
@@ -178,24 +194,34 @@ def serve_docs():
     "--serve/--no-serve", default=False, help="Start local documentation server"
 )
 @click.option("--port", default=5000, help="Port for local server")
-def cli(repo_path: str, model: str, serve: bool, port: int):
+@click.option("--gen/--no-gen", default=True, help="Generate documentation")
+def cli(repo_path: str, model: str, serve: bool, port: int, gen: bool):
     "Uses AI to help understand repositories and their changes."
-    # Remove existing generated docs
     generated_docs_path = Path("generated_docs")
-    if generated_docs_path.exists():
-        shutil.rmtree(generated_docs_path)
-    generated_docs_path.mkdir()
 
-    generator = DocGenerator(repo_path, model)
+    if gen:
+        # Remove existing generated docs
+        if generated_docs_path.exists():
+            shutil.rmtree(generated_docs_path)
+        generated_docs_path.mkdir()
 
-    # Generate documentation
-    generator.generate_docs()
+        generator = DocGenerator(repo_path, model)
 
-    # Generate changelog from recent commits
-    changes = generator.get_recent_changes()
-    changelog = generator.generate_changelog(changes)
+        # Generate documentation
+        generator.generate_docs()
 
-    Path("generated_docs/CHANGELOG.md").write_text(changelog)
+        # Generate changelog from recent commits
+        changes = generator.get_recent_changes()
+        changelog = generator.generate_changelog(changes)
+
+        Path("generated_docs/CHANGELOG.md").write_text(changelog)
+    else:
+        # Ensure the docs directory exists when serving
+        if serve and not generated_docs_path.exists():
+            click.echo(
+                "Error: No generated documentation found. Use --gen to generate docs first."
+            )
+            return
 
     if serve:
         app.run(port=port)
