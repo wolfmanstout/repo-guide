@@ -9,6 +9,8 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License"
 ]
 dependencies = [
+    "bleach-allowlist>=1.0.3",
+    "bleach>=6.2.0",
     "click",
     "gitpython>=3.1.43",
     "llm-gemini>=0.5a0",

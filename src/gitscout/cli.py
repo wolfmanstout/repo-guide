@@ -12,13 +12,33 @@ from mkdocs.commands.serve import serve as mkdocs_serve
 
 class DocGenerator:
     def __init__(
-        self, repo_path: str, model_name: str | None = None, count_tokens: bool = False
+        self,
+        repo_path: Path,
+        output_path: Path,
+        model_name: str | None = None,
+        count_tokens: bool = False,
     ):
-        self.repo_path = Path(repo_path)
+        self.repo_path = repo_path
+        self.output_path = output_path
         self.repo = git.Repo(repo_path)
         self.model = llm.get_model(model_name) if model_name else llm.get_model()
         self.count_tokens = count_tokens
         self.total_tokens = 0
+        # Parse repo URL from self.repo remote, handling both HTTPS and SSH URLs
+        self.repo_url = (
+            self.repo.remote().url.replace(".git", "").replace("git@", "https://")
+        )
+        if "github.com" in self.repo_url:
+            origin_refs = [
+                ref for ref in self.repo.remote().refs if ref.remote_name == "origin"
+            ]
+            if origin_refs:
+                default_branch = origin_refs[0].remote_head
+                self.repo_url_file_prefix = f"{self.repo_url}/blob/{default_branch}/"
+            else:
+                self.repo_url_file_prefix = f"{self.repo_url}/blob/main/"
+        else:
+            self.repo_url_file_prefix = None
 
     def get_recent_changes(self, num_commits=5):
         commits = list(self.repo.iter_commits("main", max_count=num_commits))
@@ -91,17 +111,15 @@ class DocGenerator:
         generated_readmes = {}
         for root, dirs, files in os.walk(self.repo_path, topdown=False):
             root = Path(root)
-            if str(root.resolve()) not in all_directories:
+            resolved_root = root.resolve()
+            if str(resolved_root) not in all_directories:
                 continue
+            is_repo_root = resolved_root == resolved_repo_path
 
             dirs = [root / Path(d) for d in dirs]
             dirs = [d for d in dirs if str(d.resolve()) in all_directories]
             files = [root / Path(f) for f in files]
             files = [f for f in files if str(f.resolve()) in all_files]
-
-            # Get the directory name for the prompt
-            is_repo_root = root.resolve() == resolved_repo_path
-            dir_name = resolved_repo_path.name if is_repo_root else str(root)
 
             # Get READMEs from all subdirectories
             readme_context = ""
@@ -112,7 +130,7 @@ class DocGenerator:
                     readme_context += content
                     readme_context += "\n---\n"
 
-            prompt_parts = [f"Directory: {dir_name}"]
+            prompt_parts = [f"Current directory: {root}"]
 
             if dirs:
                 dir_list = "\n".join(str(d) for d in dirs)
@@ -138,74 +156,127 @@ class DocGenerator:
                     f"Previously generated documentation:\n{readme_context}"
                 )
 
-            prompt = "=====\n\n".join(prompt_parts)
+            prompt = "\n\n=====\n\n".join(prompt_parts)
+
+            system_prompt_parts = [
+                "Provide an overview of what this directory does in Markdown, "
+                "including a summary of each subdirectory and file, starting with "
+                "the subdirectories. "
+                "Omit heading level 1 (#) as it will be added automatically. "
+                "If adding links to previously generated documentation, use the "
+                "relative path to the file from the *current* directory, not the "
+                "repo root."
+            ]
+            if self.repo_url_file_prefix:
+                system_prompt_parts.append(
+                    "Link any files mentioned to an absolute URL starting with "
+                    f"{self.repo_url_file_prefix} followed by the relative file path."
+                )
+            if is_repo_root:
+                system_prompt_parts.append(
+                    "Begin with an overall description of the repository. List the "
+                    "dependencies and how they are used."
+                )
+            system_prompt = " ".join(system_prompt_parts)
+
             response = self.model.prompt(
                 prompt,
-                system=(
-                    "Provide an overview of what this directory does in Markdown, "
-                    "including a summary of each subdirectory and file, starting with "
-                    "the subdirectories. "
-                    "The title should be the directory name."
-                    "If adding links to previously generated documentation, use the "
-                    "relative path to the file from the current directory."
-                )
-                + (
-                    (
-                        "Begin with an overall description of the repository. List the "
-                        "dependencies and how they are used."
-                    )
-                    if is_repo_root
-                    else ""
-                ),
+                system=system_prompt,
             )
 
             if self.count_tokens:
                 self.total_tokens += response.usage().input or 0
                 self.total_tokens += response.usage().output or 0
 
-            output_path = Path("generated_docs/docs") / root / "README.md"
+            output_path = self.output_path / "docs" / root / "README.md"
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(response.text())
+            dir_name = resolved_repo_path.name if is_repo_root else str(root)
+            output_path.write_text(f"# {dir_name}\n\n{response.text()}")
 
             # Store the generated README
             generated_readmes[root] = response.text()
 
+    def write_mkdocs_configuration(self):
+        config_template = """\
+            site_name: {repo_name} docs by gitscout
+            theme: material
+            exclude_docs: |
+                !.*
+                !/templates/
+            hooks:
+                - my_hooks.py
+            repo_url: {repo_url}
+            edit_uri: 
+            """
+        config_content = textwrap.dedent(
+            config_template.format(
+                repo_name=self.repo_path.resolve().name, repo_url=self.repo_url
+            )
+        )
+        hooks_content = textwrap.dedent("""\
+            import bleach
+            from bleach_allowlist import markdown_tags, markdown_attrs
+
+            def on_page_content(html, **kwargs):
+                return bleach.clean(html, markdown_tags, markdown_attrs)
+            """)
+        Path(self.output_path / "mkdocs.yml").write_text(config_content)
+        Path(self.output_path / "my_hooks.py").write_text(hooks_content)
+
 
 @click.command()
 @click.version_option()
-@click.argument("repo_path")
+@click.argument(
+    "repo_path",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
+)
 @click.option("--model", help="LLM model to use (defaults to system default)")
 @click.option(
     "--serve/--no-serve", default=False, help="Start local documentation server"
 )
-@click.option("--port", default=5000, help="Port for local server")
+@click.option("--port", default=8000, help="Port for local server")
 @click.option("--gen/--no-gen", default=True, help="Generate documentation")
 @click.option(
     "--count-tokens/--no-count-tokens", default=False, help="Count tokens used"
 )
+@click.option(
+    "--output-path",
+    type=click.Path(file_okay=False, dir_okay=True, writable=True, path_type=Path),
+    default="generated_docs",
+    help="Output directory for generated documentation",
+)
+@click.option(
+    "--include-changelog/--no-include-changelog",
+    default=False,
+    help="Generate changelog from recent commits",
+)
 def cli(
-    repo_path: str, model: str, serve: bool, port: int, gen: bool, count_tokens: bool
+    repo_path: Path,
+    model: str,
+    serve: bool,
+    port: int,
+    gen: bool,
+    count_tokens: bool,
+    output_path: Path,
+    include_changelog: bool,
 ):
     "Uses AI to help understand repositories and their changes."
-    generated_docs_path = Path("generated_docs")
-
+    generator = DocGenerator(repo_path, output_path, model, count_tokens)
     if gen:
         # Remove existing generated docs
-        if generated_docs_path.exists():
-            shutil.rmtree(generated_docs_path)
-        docs_path = generated_docs_path / "docs"
+        if output_path.exists():
+            shutil.rmtree(output_path)
+        docs_path = output_path / "docs"
         docs_path.mkdir(parents=True)
-
-        generator = DocGenerator(repo_path, model, count_tokens)
 
         # Generate documentation
         generator.generate_docs()
 
-        # Generate changelog from recent commits
-        changes = generator.get_recent_changes()
-        changelog = generator.generate_changelog(changes)
-
-        Path("generated_docs/docs/CHANGELOG.md").write_text(changelog)
+        # Generate changelog only if requested
+        if include_changelog:
+            changes = generator.get_recent_changes()
+            changelog = generator.generate_changelog(changes)
+            Path(output_path / "docs/CHANGELOG.md").write_text(changelog)
 
         if count_tokens:
             if generator.total_tokens:
@@ -214,26 +285,18 @@ def cli(
                 click.echo("Unable to count tokens")
     else:
         # Ensure the docs directory exists when serving
-        if serve and not generated_docs_path.exists():
+        if serve and not output_path.exists():
             click.echo(
                 "Error: No generated documentation found. Use --gen to generate docs first."
             )
             return
 
-    mkdocs_content = textwrap.dedent("""\
-        site_name: Repository Documentation
-        theme: material
-        exclude_docs: |
-            !.*
-            !/templates/
-        """)
-    Path("generated_docs/mkdocs.yml").write_text(mkdocs_content)
+    generator.write_mkdocs_configuration()
 
     if serve:
-        # app.run(port=port)  # Commented out Flask server
-        click.echo("Serving docs at http://127.0.0.1:8000/")
+        click.echo(f"Serving docs at http://127.0.0.1:{port}/")
         mkdocs_serve(
-            f"{generated_docs_path}/mkdocs.yml",
-            dev_addr="127.0.0.1:8000",
+            f"{output_path}/mkdocs.yml",
+            dev_addr=f"127.0.0.1:{port}",
             livereload=True,
         )
