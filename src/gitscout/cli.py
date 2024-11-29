@@ -208,7 +208,10 @@ def cli(
         Path("generated_docs/docs/CHANGELOG.md").write_text(changelog)
 
         if count_tokens:
-            click.echo(f"Total tokens used: {generator.total_tokens:,}")
+            if generator.total_tokens:
+                click.echo(f"Total tokens used: {generator.total_tokens:,}")
+            else:
+                click.echo("Unable to count tokens")
     else:
         # Ensure the docs directory exists when serving
         if serve and not generated_docs_path.exists():
