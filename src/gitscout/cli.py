@@ -10,6 +10,7 @@ import git
 import llm
 from flask import Flask, render_template_string
 from mistletoe import markdown
+from mkdocs.commands.serve import serve as mkdocs_serve
 
 app = Flask(__name__)
 
@@ -149,14 +150,18 @@ class DocGenerator:
             prompt = "=====\n\n".join(prompt_parts)
             response = self.model.prompt(
                 prompt,
-                system="Provide an overview of what this directory does in Markdown, including a summary of each subdirectory and file.",
+                system=(
+                    "Provide an overview of what this directory does in Markdown, "
+                    "including a summary of each subdirectory and file. "
+                    "The title should be the directory name."
+                ),
             )
 
             if self.count_tokens:
                 self.total_tokens += response.usage().input or 0
                 self.total_tokens += response.usage().output or 0
 
-            output_path = Path("generated_docs") / root / "README.md"
+            output_path = Path("generated_docs/docs") / root / "README.md"
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(response.text())
 
@@ -167,7 +172,7 @@ class DocGenerator:
 @app.route("/")
 def serve_docs():
     # Combine and convert all generated markdown files to HTML
-    docs_path = Path("generated_docs")
+    docs_path = Path("generated_docs/docs")
     all_content = []
 
     for md_file in docs_path.glob("**/*.md"):
@@ -238,7 +243,8 @@ def cli(
         # Remove existing generated docs
         if generated_docs_path.exists():
             shutil.rmtree(generated_docs_path)
-        generated_docs_path.mkdir()
+        docs_path = generated_docs_path / "docs"
+        docs_path.mkdir(parents=True)
 
         generator = DocGenerator(repo_path, model, count_tokens)
 
@@ -249,7 +255,7 @@ def cli(
         changes = generator.get_recent_changes()
         changelog = generator.generate_changelog(changes)
 
-        Path("generated_docs/CHANGELOG.md").write_text(changelog)
+        Path("generated_docs/docs/CHANGELOG.md").write_text(changelog)
 
         if count_tokens:
             click.echo(f"Total tokens used: {generator.total_tokens:,}")
@@ -261,5 +267,20 @@ def cli(
             )
             return
 
+    mkdocs_content = textwrap.dedent("""\
+        site_name: Repository Documentation
+        theme: material
+        exclude_docs: |
+            !.*
+            !/templates/
+        """)
+    Path("generated_docs/mkdocs.yml").write_text(mkdocs_content)
+
     if serve:
-        app.run(port=port)
+        # app.run(port=port)  # Commented out Flask server
+        click.echo("Serving docs at http://127.0.0.1:8000/")
+        mkdocs_serve(
+            f"{generated_docs_path}/mkdocs.yml",
+            dev_addr="127.0.0.1:8000",
+            livereload=True,
+        )

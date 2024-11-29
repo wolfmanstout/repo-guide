@@ -15,6 +15,8 @@ dependencies = [
     "llm-gemini>=0.5a0",
     "llm>=0.19a0",
     "mistletoe>=1.4.0",
+    "mkdocs-material>=9.5.46",
+    "mkdocs>=1.6.1",
 ]
 
 [build-system]
