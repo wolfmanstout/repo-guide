@@ -1,5 +1,4 @@
 import os
-import re
 import shutil
 import textwrap
 from datetime import datetime
@@ -8,19 +7,7 @@ from pathlib import Path
 import click
 import git
 import llm
-from flask import Flask, render_template_string
-from mistletoe import markdown
 from mkdocs.commands.serve import serve as mkdocs_serve
-
-app = Flask(__name__)
-
-
-def escape_markdown(text):
-    # List of characters to escape in Markdown
-    markdown_chars = r"[\`\*\_\{\}\[\]\(\)\#\+\-\.\!]"
-    # Escape each character by prefixing it with a backslash
-    escaped_text = re.sub(markdown_chars, r"\\\g<0>", text)
-    return escaped_text
 
 
 class DocGenerator:
@@ -167,58 +154,6 @@ class DocGenerator:
 
             # Store the generated README
             generated_readmes[root] = response.text()
-
-
-@app.route("/")
-def serve_docs():
-    # Combine and convert all generated markdown files to HTML
-    docs_path = Path("generated_docs/docs")
-    all_content = []
-
-    for md_file in docs_path.glob("**/*.md"):
-        content = md_file.read_text()
-        file_template = textwrap.dedent(
-            """\
-            {path}
-            ---
-            {content}
-
-            ---
-            """
-        )
-        all_content.append(
-            file_template.format(
-                path=escape_markdown(str(md_file.relative_to(docs_path))),
-                content=content,
-            )
-        )
-
-    html = markdown("\n\n".join(all_content))
-
-    return render_template_string(
-        """
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <title>Repository Documentation</title>
-                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
-                <style>
-                    .markdown-body {
-                        box-sizing: border-box;
-                        min-width: 200px;
-                        max-width: 980px;
-                        margin: 0 auto;
-                        padding: 45px;
-                    }
-                </style>
-            </head>
-            <body class="markdown-body">
-                {{ content|safe }}
-            </body>
-        </html>
-        """,
-        content=html,
-    )
 
 
 @click.command()
