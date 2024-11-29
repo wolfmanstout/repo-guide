@@ -99,6 +99,10 @@ class DocGenerator:
             files = [root / Path(f) for f in files]
             files = [f for f in files if str(f.resolve()) in all_files]
 
+            # Get the directory name for the prompt
+            is_repo_root = root.resolve() == resolved_repo_path
+            dir_name = resolved_repo_path.name if is_repo_root else str(root)
+
             # Get READMEs from all subdirectories
             readme_context = ""
             for subdir, content in generated_readmes.items():
@@ -108,7 +112,7 @@ class DocGenerator:
                     readme_context += content
                     readme_context += "\n---\n"
 
-            prompt_parts = [f"Directory: {root}"]
+            prompt_parts = [f"Directory: {dir_name}"]
 
             if dirs:
                 dir_list = "\n".join(str(d) for d in dirs)
@@ -139,8 +143,19 @@ class DocGenerator:
                 prompt,
                 system=(
                     "Provide an overview of what this directory does in Markdown, "
-                    "including a summary of each subdirectory and file. "
+                    "including a summary of each subdirectory and file, starting with "
+                    "the subdirectories. "
                     "The title should be the directory name."
+                    "If adding links to previously generated documentation, use the "
+                    "relative path to the file from the current directory."
+                )
+                + (
+                    (
+                        "Begin with an overall description of the repository. List the "
+                        "dependencies and how they are used."
+                    )
+                    if is_repo_root
+                    else ""
                 ),
             )
 
