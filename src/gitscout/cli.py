@@ -1,6 +1,7 @@
 import os
 import shutil
 import textwrap
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 
@@ -234,6 +235,11 @@ class DocGenerator:
 @click.option(
     "--serve/--no-serve", default=False, help="Start local documentation server"
 )
+@click.option(
+    "--open/--no-open",
+    default=False,
+    help="Open documentation in browser (implies --serve)",
+)
 @click.option("--port", default=8000, help="Port for local server")
 @click.option("--gen/--no-gen", default=True, help="Generate documentation")
 @click.option(
@@ -254,6 +260,7 @@ def cli(
     repo_path: Path,
     model: str,
     serve: bool,
+    open: bool,
     port: int,
     gen: bool,
     count_tokens: bool,
@@ -293,8 +300,11 @@ def cli(
 
     generator.write_mkdocs_configuration()
 
-    if serve:
-        click.echo(f"Serving docs at http://127.0.0.1:{port}/")
+    if open or serve:
+        url = f"http://127.0.0.1:{port}/"
+        click.echo(f"Serving docs at {url}")
+        if open:
+            webbrowser.open(url)
         mkdocs_serve(
             f"{output_path}/mkdocs.yml",
             dev_addr=f"127.0.0.1:{port}",
