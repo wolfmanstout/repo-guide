@@ -98,6 +98,65 @@ class DocGenerator:
 
         return response.text()
 
+    def _build_prompt(self, root, dirs, files, generated_readmes):
+        prompt_parts = [f"Current directory: {root}\n"]
+
+        if dirs:
+            dir_list = "\n".join(str(d) for d in dirs)
+            prompt_parts.append(f"Subdirectories:\n{dir_list}\n")
+
+        if files:
+            file_template = textwrap.dedent(
+                """\
+                {path}
+                ---
+                {content}
+
+                ---
+                """
+            )
+            file_contents = "".join(
+                file_template.format(path=f, content=f.read_text()) for f in files
+            )
+            prompt_parts.append(f"Files:\n{file_contents}")
+
+        if generated_readmes:
+            readme_context = ""
+            for subdir, content in generated_readmes.items():
+                if subdir.is_relative_to(root):
+                    rel_path = subdir.relative_to(self.repo_path) / "README.md"
+                    readme_context += f"\n{rel_path}:\n"
+                    readme_context += content
+                    readme_context += "\n---\n"
+            if readme_context:
+                prompt_parts.append(
+                    f"Previously generated documentation:\n{readme_context}"
+                )
+
+        return "\n=====\n\n".join(prompt_parts)
+
+    def _build_system_prompt(self, is_repo_root):
+        parts = [
+            "Provide an overview of what this directory does in Markdown, "
+            "including a summary of each subdirectory and file, starting with "
+            "the subdirectories. "
+            "Omit heading level 1 (#) as it will be added automatically. "
+            "If adding links to previously generated documentation, use the "
+            "relative path to the file from the *current* directory, not the "
+            "repo root."
+        ]
+        if self.repo_url_file_prefix:
+            parts.append(
+                "Link any files mentioned to an absolute URL starting with "
+                f"{self.repo_url_file_prefix} followed by the relative file path."
+            )
+        if is_repo_root:
+            parts.append(
+                "Begin with an overall description of the repository. List the "
+                "dependencies and how they are used."
+            )
+        return " ".join(parts)
+
     def generate_docs(self):
         all_files = set(
             str(Path(f).resolve()) for f in self.repo.git.ls_files().splitlines()
@@ -122,63 +181,8 @@ class DocGenerator:
             files = [root / Path(f) for f in files]
             files = [f for f in files if str(f.resolve()) in all_files]
 
-            # Get READMEs from all subdirectories
-            readme_context = ""
-            for subdir, content in generated_readmes.items():
-                if subdir != root and subdir.is_relative_to(root):
-                    rel_path = subdir.relative_to(self.repo_path) / "README.md"
-                    readme_context += f"\n{rel_path}:\n"
-                    readme_context += content
-                    readme_context += "\n---\n"
-
-            prompt_parts = [f"Current directory: {root}"]
-
-            if dirs:
-                dir_list = "\n".join(str(d) for d in dirs)
-                prompt_parts.append(f"Subdirectories:\n{dir_list}")
-
-            if files:
-                file_template = textwrap.dedent(
-                    """\
-                    {path}
-                    ---
-                    {content}
-
-                    ---
-                    """
-                )
-                file_contents = "".join(
-                    file_template.format(path=f, content=f.read_text()) for f in files
-                )
-                prompt_parts.append(f"Files:\n{file_contents}")
-
-            if readme_context:
-                prompt_parts.append(
-                    f"Previously generated documentation:\n{readme_context}"
-                )
-
-            prompt = "\n\n=====\n\n".join(prompt_parts)
-
-            system_prompt_parts = [
-                "Provide an overview of what this directory does in Markdown, "
-                "including a summary of each subdirectory and file, starting with "
-                "the subdirectories. "
-                "Omit heading level 1 (#) as it will be added automatically. "
-                "If adding links to previously generated documentation, use the "
-                "relative path to the file from the *current* directory, not the "
-                "repo root."
-            ]
-            if self.repo_url_file_prefix:
-                system_prompt_parts.append(
-                    "Link any files mentioned to an absolute URL starting with "
-                    f"{self.repo_url_file_prefix} followed by the relative file path."
-                )
-            if is_repo_root:
-                system_prompt_parts.append(
-                    "Begin with an overall description of the repository. List the "
-                    "dependencies and how they are used."
-                )
-            system_prompt = " ".join(system_prompt_parts)
+            prompt = self._build_prompt(root, dirs, files, generated_readmes)
+            system_prompt = self._build_system_prompt(is_repo_root)
 
             response = self.model.prompt(
                 prompt,
