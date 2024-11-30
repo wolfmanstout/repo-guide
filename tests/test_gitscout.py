@@ -95,3 +95,29 @@ def test_system_prompt_construction(test_repo, tmp_path):
     )
 
     assert system_prompt == expected_system
+
+
+def test_file_decoding_failures(test_repo, tmp_path, capfd):
+    """Test handling of files that can't be decoded."""
+    # Create test files with different encodings
+    (test_repo / "utf8.txt").write_text("Hello", encoding="utf-8")
+    (test_repo / "latin1.txt").write_text("Café", encoding="latin-1")
+
+    # Create a file with partial UTF-16 bytes that will fail UTF-8/Latin1/CP1252 decoding
+    bad_file = test_repo / "broken.txt"
+    bad_file.write_bytes(b"Hello\x00 \x00W\x00o\x00r\x00l\x00d")  # UTF-16LE without BOM
+
+    generator = DocGenerator(test_repo, tmp_path / "output")
+
+    files = [
+        test_repo / "utf8.txt",
+        test_repo / "latin1.txt",
+        test_repo / "broken.txt",
+    ]
+
+    prompt = generator._build_prompt(test_repo, [], files, {})
+
+    # Verify only readable files are in prompt
+    assert "utf8.txt" in prompt
+    assert "latin1.txt" in prompt
+    assert "binary.dat" not in prompt

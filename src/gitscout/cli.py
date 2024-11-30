@@ -98,6 +98,23 @@ class DocGenerator:
 
         return response.text()
 
+    def _safe_read_file(self, file_path: Path) -> str | None:
+        """Safely read file content, handling encoding errors."""
+        encodings = ["utf-8", "latin-1", "cp1252"]
+        for encoding in encodings:
+            try:
+                return file_path.read_text(encoding=encoding)
+            except UnicodeDecodeError:
+                continue
+            except Exception as e:
+                click.echo(f"Error reading {file_path}: {e}", err=True)
+                return None
+
+        click.echo(
+            f"Failed to decode {file_path} with any supported encoding", err=True
+        )
+        return None
+
     def _build_prompt(self, root, dirs, files, generated_readmes):
         prompt_parts = [f"Current directory: {root}\n"]
 
@@ -106,19 +123,20 @@ class DocGenerator:
             prompt_parts.append(f"Subdirectories:\n{dir_list}\n")
 
         if files:
-            file_template = textwrap.dedent(
-                """\
-                {path}
-                ---
-                {content}
+            file_contents = ""
+            for f in files:
+                content = self._safe_read_file(f)
+                if content is not None:
+                    file_template = textwrap.dedent("""\
+                        {path}
+                        ---
+                        {content}
 
-                ---
-                """
-            )
-            file_contents = "".join(
-                file_template.format(path=f, content=f.read_text()) for f in files
-            )
-            prompt_parts.append(f"Files:\n{file_contents}")
+                        ---
+                        """)
+                    file_contents += file_template.format(path=f, content=content)
+            if file_contents:
+                prompt_parts.append(f"Files:\n{file_contents}")
 
         if generated_readmes:
             readme_context = ""
