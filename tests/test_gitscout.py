@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import git
+import pytest
 from click.testing import CliRunner
 
 from gitscout.cli import DocGenerator, cli
@@ -14,8 +15,9 @@ def test_version():
         assert result.output.startswith("cli, version ")
 
 
-def test_prompt_construction(tmp_path):
-    # Create a simple repository structure
+@pytest.fixture
+def test_repo(tmp_path):
+    """Create a test repository with some sample files."""
     repo_path = tmp_path / "test_repo"
     repo_path.mkdir()
 
@@ -28,31 +30,33 @@ def test_prompt_construction(tmp_path):
     repo = git.Repo.init(repo_path)
     repo.create_remote("origin", "https://github.com/test/test_repo.git")
 
-    # Create DocGenerator instance
-    generator = DocGenerator(repo_path, tmp_path / "output")
+    return repo_path
+
+
+def test_prompt_construction(test_repo, tmp_path):
+    generator = DocGenerator(test_repo, tmp_path / "output")
 
     # Add some dummy generated readmes
     generated_readmes = {
-        repo_path / "src": "## Source Code\nContains main application code."
+        test_repo / "src": "## Source Code\nContains main application code."
     }
 
-    # Test prompt construction directly
-    dirs = [repo_path / "src"]
-    files = [repo_path / "README.md"]
-    prompt = generator._build_prompt(repo_path, dirs, files, generated_readmes)
-    system_prompt = generator._build_system_prompt(is_repo_root=True)
+    # Test prompt construction
+    dirs = [test_repo / "src"]
+    files = [test_repo / "README.md"]
+    prompt = generator._build_prompt(test_repo, dirs, files, generated_readmes)
 
-    expected_prompt = f"""Current directory: {repo_path}
+    expected_prompt = f"""Current directory: {test_repo}
 
 =====
 
 Subdirectories:
-{repo_path / "src"}
+{test_repo / "src"}
 
 =====
 
 Files:
-{repo_path / "README.md"}
+{test_repo / "README.md"}
 ---
 # Test Repo
 
@@ -68,6 +72,14 @@ Contains main application code.
 ---
 """
 
+    assert prompt == expected_prompt
+
+
+def test_system_prompt_construction(test_repo, tmp_path):
+    generator = DocGenerator(test_repo, tmp_path / "output")
+
+    system_prompt = generator._build_system_prompt(is_repo_root=True)
+
     expected_system = (
         "Provide an overview of what this directory does in Markdown, "
         "including a summary of each subdirectory and file, starting with "
@@ -82,5 +94,4 @@ Contains main application code.
         "dependencies and how they are used."
     )
 
-    assert prompt == expected_prompt
     assert system_prompt == expected_system
