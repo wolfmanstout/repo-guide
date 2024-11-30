@@ -37,7 +37,7 @@ def test_prompt_construction(test_repo, tmp_path):
     generator = DocGenerator(
         repo_path=test_repo,
         output_path=tmp_path / "output",
-        model_name=None,
+        model_name="",
         count_tokens=False,
         ignore_patterns=[],
     )
@@ -85,7 +85,7 @@ def test_system_prompt_construction(test_repo, tmp_path):
     generator = DocGenerator(
         repo_path=test_repo,
         output_path=tmp_path / "output",
-        model_name=None,
+        model_name="",
         count_tokens=False,
         ignore_patterns=[],
     )
@@ -122,7 +122,7 @@ def test_file_decoding_failures(test_repo, tmp_path, capfd):
     generator = DocGenerator(
         repo_path=test_repo,
         output_path=tmp_path / "output",
-        model_name=None,
+        model_name="",
         count_tokens=False,
         ignore_patterns=[],
     )

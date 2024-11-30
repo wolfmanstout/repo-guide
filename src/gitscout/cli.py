@@ -18,7 +18,7 @@ class DocGenerator:
         self,
         repo_path: Path,
         output_path: Path,
-        model_name: str | None,
+        model_name: str,
         count_tokens: bool,
         ignore_patterns: Sequence[str],
     ):
@@ -26,6 +26,7 @@ class DocGenerator:
         self.output_path = output_path
         self.repo = git.Repo(repo_path)
         self.model = llm.get_model(model_name) if model_name else llm.get_model()
+        click.echo(f"Using model: {self.model.model_id}")
         self.count_tokens = count_tokens
         self.total_tokens = 0
         self.ignore_patterns = ignore_patterns
@@ -275,7 +276,11 @@ class DocGenerator:
     "repo_path",
     type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
 )
-@click.option("--model", help="LLM model to use (defaults to system default)")
+@click.option(
+    "--model",
+    default="gemini-1.5-flash-latest",
+    help="LLM model to use (defaults to system default)",
+)
 @click.option(
     "--serve/--no-serve", default=False, help="Start local documentation server"
 )
