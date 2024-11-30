@@ -247,7 +247,7 @@ class DocGenerator:
 @click.option("--port", default=8000, help="Port for local server")
 @click.option("--gen/--no-gen", default=True, help="Generate documentation")
 @click.option(
-    "--count-tokens/--no-count-tokens", default=False, help="Count tokens used"
+    "--count-tokens/--no-count-tokens", default=True, help="Count tokens used"
 )
 @click.option(
     "--output-path",
@@ -293,7 +293,7 @@ def cli(
             if generator.total_tokens:
                 click.echo(f"Total tokens used: {generator.total_tokens:,}")
             else:
-                click.echo("Unable to count tokens")
+                click.echo("Unable to count tokens. Add --no-count-tokens to disable.")
     else:
         # Ensure the docs directory exists when serving
         if serve and not output_path.exists():
