@@ -176,7 +176,20 @@ class DocGenerator:
             )
         return " ".join(parts)
 
-    def generate_docs(self):
+    def load_existing_docs(self) -> dict[Path, str]:
+        """Load existing documentation from the filesystem."""
+        generated_readmes = {}
+        if not (self.output_path / "docs").exists():
+            return generated_readmes
+
+        for readme in (self.output_path / "docs").rglob("README.md"):
+            rel_path = readme.parent.relative_to(self.output_path / "docs")
+            source_path = self.repo_path / rel_path
+            if source_path.exists():
+                generated_readmes[source_path] = readme.read_text()
+        return generated_readmes
+
+    def generate_docs(self, resume=False):
         all_files = set(
             str((self.repo_path / f).resolve())
             for f in self.repo.git.ls_files().splitlines()
@@ -188,9 +201,14 @@ class DocGenerator:
             for d in Path(f).parents
             if d.is_relative_to(resolved_repo_path)
         )
-        generated_readmes = {}
+        generated_readmes = self.load_existing_docs() if resume else {}
         for root, dirs, files in os.walk(self.repo_path, topdown=False):
             root = Path(root)
+            # Skip directories that already have documentation when resuming
+            if resume and root in generated_readmes:
+                click.echo(f"Skipping {root} (already documented)")
+                continue
+
             resolved_root = (self.repo_path / root).resolve()
             if str(resolved_root) not in all_directories:
                 continue
@@ -240,7 +258,7 @@ class DocGenerator:
             generated_readmes[root] = response.text()
 
     def write_mkdocs_configuration(self):
-        config_template = """\
+        config_template = textwrap.dedent("""\
             site_name: {repo_name} docs by gitscout
             theme: material
             exclude_docs: |
@@ -248,7 +266,7 @@ class DocGenerator:
                 !/templates/
             hooks:
                 - my_hooks.py
-            """
+            """)
         if self.repo_url:
             config_template += textwrap.dedent("""\
                 repo_url: {repo_url}
@@ -311,6 +329,11 @@ class DocGenerator:
     default=[],
     help="List of patterns to ignore",
 )
+@click.option(
+    "--resume/--no-resume",
+    default=False,
+    help="Resume documentation generation from last stopping point",
+)
 def cli(
     repo_path: Path,
     model: str,
@@ -322,6 +345,7 @@ def cli(
     output_path: Path,
     include_changelog: bool,
     ignore: tuple[str],
+    resume: bool,
 ):
     "Uses AI to help understand repositories and their changes."
     generator = DocGenerator(
@@ -332,14 +356,15 @@ def cli(
         ignore_patterns=ignore,
     )
     if gen:
-        # Remove existing generated docs
-        if output_path.exists():
+        # Only remove existing docs if not resuming
+        if not resume and output_path.exists():
             shutil.rmtree(output_path)
+
         docs_path = output_path / "docs"
-        docs_path.mkdir(parents=True)
+        docs_path.mkdir(parents=True, exist_ok=True)
 
         # Generate documentation
-        generator.generate_docs()
+        generator.generate_docs(resume=resume)
 
         # Generate changelog only if requested
         if include_changelog:
