@@ -34,7 +34,13 @@ def test_repo(tmp_path):
 
 
 def test_prompt_construction(test_repo, tmp_path):
-    generator = DocGenerator(test_repo, tmp_path / "output")
+    generator = DocGenerator(
+        repo_path=test_repo,
+        output_path=tmp_path / "output",
+        model_name=None,
+        count_tokens=False,
+        ignore_patterns=[],
+    )
 
     # Add some dummy generated readmes
     generated_readmes = {
@@ -76,7 +82,13 @@ Contains main application code.
 
 
 def test_system_prompt_construction(test_repo, tmp_path):
-    generator = DocGenerator(test_repo, tmp_path / "output")
+    generator = DocGenerator(
+        repo_path=test_repo,
+        output_path=tmp_path / "output",
+        model_name=None,
+        count_tokens=False,
+        ignore_patterns=[],
+    )
 
     system_prompt = generator._build_system_prompt(is_repo_root=True)
 
@@ -107,7 +119,13 @@ def test_file_decoding_failures(test_repo, tmp_path, capfd):
     bad_file = test_repo / "broken.txt"
     bad_file.write_bytes(b"Hello\x00 \x00W\x00o\x00r\x00l\x00d")  # UTF-16LE without BOM
 
-    generator = DocGenerator(test_repo, tmp_path / "output")
+    generator = DocGenerator(
+        repo_path=test_repo,
+        output_path=tmp_path / "output",
+        model_name=None,
+        count_tokens=False,
+        ignore_patterns=[],
+    )
 
     files = [
         test_repo / "utf8.txt",

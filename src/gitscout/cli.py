@@ -2,7 +2,9 @@ import os
 import shutil
 import textwrap
 import webbrowser
+from collections.abc import Sequence
 from datetime import datetime
+from fnmatch import fnmatch
 from pathlib import Path
 
 import click
@@ -16,8 +18,9 @@ class DocGenerator:
         self,
         repo_path: Path,
         output_path: Path,
-        model_name: str | None = None,
-        count_tokens: bool = False,
+        model_name: str | None,
+        count_tokens: bool,
+        ignore_patterns: Sequence[str],
     ):
         self.repo_path = repo_path
         self.output_path = output_path
@@ -25,6 +28,7 @@ class DocGenerator:
         self.model = llm.get_model(model_name) if model_name else llm.get_model()
         self.count_tokens = count_tokens
         self.total_tokens = 0
+        self.ignore_patterns = ignore_patterns
         # Parse repo URL from self.repo remote, handling both HTTPS and SSH URLs
         self.repo_url = (
             self.repo.remote().url.replace(".git", "").replace("git@", "https://")
@@ -192,12 +196,28 @@ class DocGenerator:
             resolved_root = root.resolve()
             if str(resolved_root) not in all_directories:
                 continue
+
+            rel_path = root.relative_to(self.repo_path)
+            if self.count_tokens:
+                click.echo(
+                    f"Processing {rel_path} (tokens used so far: {self.total_tokens:,})"
+                )
+            else:
+                click.echo(f"Processing {rel_path}")
+
             is_repo_root = resolved_root == resolved_repo_path
 
             dirs = [root / Path(d) for d in dirs]
             dirs = [d for d in dirs if str(d.resolve()) in all_directories]
             files = [root / Path(f) for f in files]
-            files = [f for f in files if str(f.resolve()) in all_files]
+            files = [
+                f
+                for f in files
+                if str(f.resolve()) in all_files
+                and not any(
+                    fnmatch(str(f), pattern) for pattern in self.ignore_patterns
+                )
+            ]
 
             prompt = self._build_prompt(root, dirs, files, generated_readmes)
             system_prompt = self._build_system_prompt(is_repo_root)
@@ -278,6 +298,12 @@ class DocGenerator:
     default=False,
     help="Generate changelog from recent commits",
 )
+@click.option(
+    "--ignore",
+    multiple=True,
+    default=[],
+    help="List of patterns to ignore",
+)
 def cli(
     repo_path: Path,
     model: str,
@@ -288,9 +314,16 @@ def cli(
     count_tokens: bool,
     output_path: Path,
     include_changelog: bool,
+    ignore: tuple[str],
 ):
     "Uses AI to help understand repositories and their changes."
-    generator = DocGenerator(repo_path, output_path, model, count_tokens)
+    generator = DocGenerator(
+        repo_path,
+        output_path,
+        model,
+        count_tokens,
+        ignore_patterns=ignore,
+    )
     if gen:
         # Remove existing generated docs
         if output_path.exists():
