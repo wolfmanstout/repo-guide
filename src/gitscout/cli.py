@@ -29,21 +29,17 @@ class DocGenerator:
         self.count_tokens = count_tokens
         self.total_tokens = 0
         self.ignore_patterns = ignore_patterns
-        # Parse repo URL from self.repo remote, handling both HTTPS and SSH URLs
-        self.repo_url = (
-            self.repo.remote().url.replace(".git", "").replace("git@", "https://")
-        )
-        if "github.com" in self.repo_url:
-            origin_refs = [
-                ref for ref in self.repo.remote().refs if ref.remote_name == "origin"
-            ]
-            if origin_refs:
-                default_branch = origin_refs[0].remote_head
+
+        # Parse repo URL and default branch to construct file URLs
+        self.repo_url = None
+        self.repo_url_file_prefix = None
+        origins = [remote for remote in self.repo.remotes if remote.name == "origin"]
+        if origins:
+            origin = origins[0]
+            self.repo_url = origin.url.replace(".git", "").replace("git@", "https://")
+            if "github.com" in self.repo_url:
+                default_branch = origin.refs[0].remote_head if origin.refs else "main"
                 self.repo_url_file_prefix = f"{self.repo_url}/blob/{default_branch}/"
-            else:
-                self.repo_url_file_prefix = f"{self.repo_url}/blob/main/"
-        else:
-            self.repo_url_file_prefix = None
 
     def get_recent_changes(self, num_commits=5):
         commits = list(self.repo.iter_commits("main", max_count=num_commits))
@@ -104,7 +100,7 @@ class DocGenerator:
 
     def _safe_read_file(self, file_path: Path) -> str | None:
         """Safely read file content, handling encoding errors."""
-        encodings = ["utf-8", "latin-1", "cp1252"]
+        encodings = ["utf-8", "cp1252"]
         for encoding in encodings:
             try:
                 return file_path.read_text(encoding=encoding)
@@ -181,7 +177,8 @@ class DocGenerator:
 
     def generate_docs(self):
         all_files = set(
-            str(Path(f).resolve()) for f in self.repo.git.ls_files().splitlines()
+            str((self.repo_path / f).resolve())
+            for f in self.repo.git.ls_files().splitlines()
         )
         resolved_repo_path = self.repo_path.resolve()
         all_directories = set(
@@ -193,7 +190,7 @@ class DocGenerator:
         generated_readmes = {}
         for root, dirs, files in os.walk(self.repo_path, topdown=False):
             root = Path(root)
-            resolved_root = root.resolve()
+            resolved_root = (self.repo_path / root).resolve()
             if str(resolved_root) not in all_directories:
                 continue
 
@@ -207,13 +204,15 @@ class DocGenerator:
 
             is_repo_root = resolved_root == resolved_repo_path
 
-            dirs = [root / Path(d) for d in dirs]
-            dirs = [d for d in dirs if str(d.resolve()) in all_directories]
-            files = [root / Path(f) for f in files]
+            dirs = [
+                root / d
+                for d in dirs
+                if str((self.repo_path / root / d).resolve()) in all_directories
+            ]
             files = [
-                f
+                root / f
                 for f in files
-                if str(f.resolve()) in all_files
+                if str((self.repo_path / root / f).resolve()) in all_files
                 and not any(
                     fnmatch(str(f), pattern) for pattern in self.ignore_patterns
                 )
@@ -248,9 +247,12 @@ class DocGenerator:
                 !/templates/
             hooks:
                 - my_hooks.py
-            repo_url: {repo_url}
-            edit_uri: 
             """
+        if self.repo_url:
+            config_template += textwrap.dedent("""\
+                repo_url: {repo_url}
+                edit_uri:
+                """)
         config_content = textwrap.dedent(
             config_template.format(
                 repo_name=self.repo_path.resolve().name, repo_url=self.repo_url
