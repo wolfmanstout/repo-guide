@@ -24,6 +24,7 @@ class DocGenerator:
     ):
         self.repo_path = repo_path
         self.output_path = output_path
+        self.docs_path = output_path / "docs"
         self.repo = git.Repo(repo_path)
         self.model = llm.get_model(model_name) if model_name else llm.get_model()
         click.echo(f"Using model: {self.model.model_id}")
@@ -179,11 +180,11 @@ class DocGenerator:
     def load_existing_docs(self) -> dict[Path, str]:
         """Load existing documentation from the filesystem."""
         generated_readmes = {}
-        if not (self.output_path / "docs").exists():
+        if not self.docs_path.exists():
             return generated_readmes
 
-        for readme in (self.output_path / "docs").rglob("README.md"):
-            rel_path = readme.parent.relative_to(self.output_path / "docs")
+        for readme in self.docs_path.rglob("README.md"):
+            rel_path = readme.parent.relative_to(self.docs_path)
             source_path = self.repo_path / rel_path
             if source_path.exists():
                 generated_readmes[source_path] = readme.read_text()
@@ -209,29 +210,27 @@ class DocGenerator:
                 click.echo(f"Skipping {root} (already documented)")
                 continue
 
-            resolved_root = (self.repo_path / root).resolve()
+            resolved_root = root.resolve()
             if str(resolved_root) not in all_directories:
                 continue
 
-            rel_path = root.relative_to(self.repo_path)
+            rel_root = root.relative_to(self.repo_path)
             if self.count_tokens:
                 click.echo(
-                    f"Processing {rel_path} (tokens used so far: {self.total_tokens:,})"
+                    f"Processing {rel_root} (tokens used so far: {self.total_tokens:,})"
                 )
             else:
-                click.echo(f"Processing {rel_path}")
+                click.echo(f"Processing {rel_root}")
 
             is_repo_root = resolved_root == resolved_repo_path
 
             dirs = [
-                root / d
-                for d in dirs
-                if str((self.repo_path / root / d).resolve()) in all_directories
+                root / d for d in dirs if str((root / d).resolve()) in all_directories
             ]
             files = [
                 root / f
                 for f in files
-                if str((self.repo_path / root / f).resolve()) in all_files
+                if str((root / f).resolve()) in all_files
                 and not any(
                     fnmatch(str(f), pattern) for pattern in self.ignore_patterns
                 )
@@ -249,10 +248,10 @@ class DocGenerator:
                 self.total_tokens += response.usage().input or 0
                 self.total_tokens += response.usage().output or 0
 
-            output_path = self.output_path / "docs" / root / "README.md"
-            output_path.parent.mkdir(parents=True, exist_ok=True)
+            readme_path = self.docs_path / rel_root / "README.md"
+            readme_path.parent.mkdir(parents=True, exist_ok=True)
             dir_name = resolved_repo_path.name if is_repo_root else str(root)
-            output_path.write_text(f"# {dir_name}\n\n{response.text()}")
+            readme_path.write_text(f"# {dir_name}\n\n{response.text()}")
 
             # Store the generated README
             generated_readmes[root] = response.text()
