@@ -52,17 +52,17 @@ def test_prompt_construction(test_repo, tmp_path):
     files = [test_repo / "README.md"]
     prompt = generator._build_prompt(test_repo, dirs, files, generated_readmes)
 
-    expected_prompt = f"""Current directory: {test_repo}
+    expected_prompt = f"""Current directory (path relative to repo root): .
 
 =====
 
-Subdirectories:
-{test_repo / "src"}
+Subdirectories (paths relative to repo root):
+src
 
 =====
 
-Files:
-{test_repo / "README.md"}
+Files (paths relative to repo root):
+README.md
 ---
 # Test Repo
 
@@ -70,7 +70,7 @@ Files:
 
 =====
 
-Previously generated documentation:
+Previously generated documentation (paths relative to current directory):
 
 {Path("src/README.md")}:
 ## Source Code
@@ -98,10 +98,9 @@ def test_system_prompt_construction(test_repo, tmp_path):
         "the subdirectories. "
         "Omit heading level 1 (#) as it will be added automatically. "
         "If adding links to previously generated documentation, use the "
-        "relative path to the file from the *current* directory, not the "
-        "repo root. "
+        "relative path to the file from the current directory. "
         "Link any files mentioned to an absolute URL starting with "
-        "https://github.com/test/test_repo/blob/main/ followed by the relative file path. "
+        "https://github.com/test/test_repo/blob/main/ followed by the repo-relative file path. "
         "Begin with an overall description of the repository. List the "
         "dependencies and how they are used."
     )

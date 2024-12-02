@@ -118,11 +118,15 @@ class DocGenerator:
         return None
 
     def _build_prompt(self, root, dirs, files, generated_readmes):
-        prompt_parts = [f"Current directory: {root}\n"]
+        prompt_parts = [
+            f"Current directory (path relative to repo root): {root.relative_to(self.repo_path)}\n"
+        ]
 
         if dirs:
-            dir_list = "\n".join(str(d) for d in dirs)
-            prompt_parts.append(f"Subdirectories:\n{dir_list}\n")
+            dir_list = "\n".join(str(d.relative_to(self.repo_path)) for d in dirs)
+            prompt_parts.append(
+                f"Subdirectories (paths relative to repo root):\n{dir_list}\n"
+            )
 
         if files:
             file_contents = ""
@@ -136,21 +140,25 @@ class DocGenerator:
 
                         ---
                         """)
-                    file_contents += file_template.format(path=f, content=content)
+                    file_contents += file_template.format(
+                        path=f.relative_to(self.repo_path), content=content
+                    )
             if file_contents:
-                prompt_parts.append(f"Files:\n{file_contents}")
+                prompt_parts.append(
+                    f"Files (paths relative to repo root):\n{file_contents}"
+                )
 
         if generated_readmes:
             readme_context = ""
             for subdir, content in generated_readmes.items():
                 if subdir.is_relative_to(root):
-                    rel_path = subdir.relative_to(self.repo_path) / "README.md"
+                    rel_path = subdir.relative_to(root) / "README.md"
                     readme_context += f"\n{rel_path}:\n"
                     readme_context += content
                     readme_context += "\n---\n"
             if readme_context:
                 prompt_parts.append(
-                    f"Previously generated documentation:\n{readme_context}"
+                    f"Previously generated documentation (paths relative to current directory):\n{readme_context}"
                 )
 
         return "\n=====\n\n".join(prompt_parts)
@@ -162,13 +170,12 @@ class DocGenerator:
             "the subdirectories. "
             "Omit heading level 1 (#) as it will be added automatically. "
             "If adding links to previously generated documentation, use the "
-            "relative path to the file from the *current* directory, not the "
-            "repo root."
+            "relative path to the file from the current directory."
         ]
         if self.repo_url_file_prefix:
             parts.append(
                 "Link any files mentioned to an absolute URL starting with "
-                f"{self.repo_url_file_prefix} followed by the relative file path."
+                f"{self.repo_url_file_prefix} followed by the repo-relative file path."
             )
         if is_repo_root:
             parts.append(
@@ -250,7 +257,11 @@ class DocGenerator:
 
             readme_path = self.docs_path / rel_root / "README.md"
             readme_path.parent.mkdir(parents=True, exist_ok=True)
-            dir_name = resolved_repo_path.name if is_repo_root else str(root)
+            dir_name = (
+                resolved_repo_path.name
+                if is_repo_root
+                else str(root.relative_to(self.repo_path))
+            )
             readme_path.write_text(f"# {dir_name}\n\n{response.text()}")
 
             # Store the generated README
