@@ -301,76 +301,92 @@ class DocGenerator:
 @click.command()
 @click.version_option()
 @click.argument(
-    "repo_path",
+    "repo_dir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
 )
 @click.option(
     "--model",
     default="gemini-1.5-flash-latest",
-    help="LLM model to use (defaults to system default)",
+    show_default=True,
+    help="LLM model to use",
 )
 @click.option(
-    "--serve/--no-serve", default=False, help="Start local documentation server"
+    "--serve",
+    is_flag=True,
+    help="Start local documentation server",
 )
 @click.option(
-    "--open/--no-open",
-    default=False,
+    "--open",
+    is_flag=True,
     help="Open documentation in browser (implies --serve)",
 )
-@click.option("--port", default=8000, help="Port for local server")
-@click.option("--gen/--no-gen", default=True, help="Generate documentation")
+@click.option("--port", default=8000, show_default=True, help="Port for local server")
 @click.option(
-    "--count-tokens/--no-count-tokens", default=True, help="Count tokens used"
+    "--gen/--no-gen", default=True, show_default=True, help="Generate documentation"
 )
 @click.option(
-    "--output-path",
+    "--count-tokens/--no-count-tokens",
+    default=True,
+    show_default=True,
+    help="Count tokens used",
+)
+@click.option(
+    "--output-dir",
     type=click.Path(file_okay=False, dir_okay=True, writable=True, path_type=Path),
     default="generated_docs",
+    show_default=True,
     help="Output directory for generated documentation",
 )
 @click.option(
     "--include-changelog/--no-include-changelog",
     default=False,
+    show_default=True,
     help="Generate changelog from recent commits",
 )
 @click.option(
     "--ignore",
     multiple=True,
-    default=[],
-    help="List of patterns to ignore",
+    help="Pattern to ignore (may be specified multiple times)",
 )
 @click.option(
-    "--resume/--no-resume",
-    default=False,
+    "--resume",
+    is_flag=True,
     help="Resume documentation generation from last stopping point",
 )
+@click.option(
+    "--public/--local",
+    default=False,
+    show_default=True,
+    help="Serve documentation on all network interfaces (0.0.0.0). Warning: This makes docs accessible to other devices on your network.",
+)
 def cli(
-    repo_path: Path,
+    repo_dir: Path,
     model: str,
     serve: bool,
     open: bool,
     port: int,
     gen: bool,
     count_tokens: bool,
-    output_path: Path,
+    output_dir: Path,
     include_changelog: bool,
     ignore: tuple[str],
     resume: bool,
+    public: bool,
 ):
     "Uses AI to help understand repositories and their changes."
     generator = DocGenerator(
-        repo_path,
-        output_path,
+        repo_dir,
+        output_dir,
         model,
         count_tokens,
         ignore_patterns=ignore,
     )
     if gen:
         # Only remove existing docs if not resuming
-        if not resume and output_path.exists():
-            shutil.rmtree(output_path)
+        if not resume and output_dir.exists():
+            shutil.rmtree(output_dir)
 
-        docs_path = output_path / "docs"
+        docs_path = output_dir / "docs"
         docs_path.mkdir(parents=True, exist_ok=True)
 
         # Generate documentation
@@ -380,7 +396,7 @@ def cli(
         if include_changelog:
             changes = generator.get_recent_changes()
             changelog = generator.generate_changelog(changes)
-            Path(output_path / "docs/CHANGELOG.md").write_text(changelog)
+            Path(output_dir / "docs/CHANGELOG.md").write_text(changelog)
 
         if count_tokens:
             if generator.total_tokens:
@@ -389,7 +405,7 @@ def cli(
                 click.echo("Unable to count tokens. Add --no-count-tokens to disable.")
     else:
         # Ensure the docs directory exists when serving
-        if serve and not output_path.exists():
+        if serve and not output_dir.exists():
             click.echo(
                 "Error: No generated documentation found. Use --gen to generate docs first."
             )
@@ -399,11 +415,12 @@ def cli(
 
     if open or serve:
         url = f"http://127.0.0.1:{port}/"
-        click.echo(f"Serving docs at {url}")
+        click.echo(f"Serving docs at {url}" + (" (public)" if public else ""))
         if open:
             webbrowser.open(url)
+        host = "0.0.0.0" if public else "127.0.0.1"
         mkdocs_serve(
-            f"{output_path}/mkdocs.yml",
-            dev_addr=f"127.0.0.1:{port}",
+            f"{output_dir}/mkdocs.yml",
+            dev_addr=f"{host}:{port}",
             livereload=True,
         )
