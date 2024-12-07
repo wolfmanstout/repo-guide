@@ -26,9 +26,11 @@ def test_repo(tmp_path):
     (repo_path / "src/main.py").write_text("def main():\n    pass")
     (repo_path / "README.md").write_text("# Test Repo")
 
-    # Initialize git repo with a remote
+    # Initialize git repo with a remote and commit files
     repo = git.Repo.init(repo_path)
     repo.create_remote("origin", "https://github.com/test/test_repo.git")
+    repo.index.add(["src/main.py", "README.md"])
+    repo.index.commit("Initial commit")
 
     return repo_path
 
@@ -138,3 +140,44 @@ def test_file_decoding_failures(test_repo, tmp_path, capfd):
     assert "utf8.txt" in prompt
     assert "latin1.txt" in prompt
     assert "binary.dat" not in prompt
+
+
+@pytest.fixture
+def mock_model(monkeypatch):
+    """Mock LLM model that returns truncated input as response."""
+
+    class MockResponse:
+        def __init__(self, text):
+            self._text = text
+
+        def text(self):
+            return self._text
+
+        def usage(self):
+            return type("Usage", (), {"input": 0, "output": 0})()
+
+    class MockModel:
+        model_id = "mock"
+
+        def prompt(self, prompt, system=None):
+            return MockResponse(prompt[:5] + "...")
+
+    monkeypatch.setattr("llm.get_model", lambda *args: MockModel())
+
+
+def test_doc_generation_end_to_end(mock_model, test_repo):
+    """Test full documentation generation process using CLI."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        # Run the CLI command with default output dir
+        result = runner.invoke(cli, [str(test_repo)])
+        assert result.exit_code == 0
+
+        # Verify generated documentation
+        main_readme = Path("generated_docs/docs/README.md")
+        assert main_readme.exists()
+        assert main_readme.read_text().startswith("# test_repo\n\nCurre...")
+
+        src_readme = Path("generated_docs/docs/src/README.md")
+        assert src_readme.exists()
+        assert src_readme.read_text().startswith("# src\n\nCurre...")
