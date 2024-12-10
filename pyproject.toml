@@ -17,6 +17,7 @@ dependencies = [
     "llm>=0.19a0",
     "mkdocs-material>=9.5.46",
     "mkdocs>=1.6.1",
+    "tqdm>=4.67.1",
 ]
 
 [build-system]

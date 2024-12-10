@@ -207,6 +207,7 @@ dependencies = [
     { name = "llm-gemini" },
     { name = "mkdocs" },
     { name = "mkdocs-material" },
+    { name = "tqdm" },
 ]
 
 [package.dev-dependencies]
@@ -224,6 +225,7 @@ requires-dist = [
     { name = "llm-gemini", specifier = ">=0.5a0" },
     { name = "mkdocs", specifier = ">=1.6.1" },
     { name = "mkdocs-material", specifier = ">=9.5.46" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [package.metadata.requires-dev]

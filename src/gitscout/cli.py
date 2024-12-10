@@ -11,6 +11,7 @@ import click
 import git
 import llm
 from mkdocs.commands.serve import serve as mkdocs_serve
+from tqdm import tqdm
 
 
 class DocGenerator:
@@ -21,12 +22,14 @@ class DocGenerator:
         model_name: str,
         count_tokens: bool,
         ignore_patterns: Sequence[str],
+        verbose: bool = False,
     ):
         self.repo_path = repo_path
         self.output_path = output_path
         self.docs_path = output_path / "docs"
         self.repo = git.Repo(repo_path)
         self.model = llm.get_model(model_name) if model_name else llm.get_model()
+        self.verbose = verbose
         click.echo(f"Using model: {self.model.model_id}")
         self.count_tokens = count_tokens
         self.total_tokens = 0
@@ -210,24 +213,38 @@ class DocGenerator:
             if d.is_relative_to(resolved_repo_path)
         )
         generated_readmes = self.load_existing_docs() if resume else {}
-        for root, dirs, files in os.walk(self.repo_path, topdown=False):
+        walk_triples = [
+            (r, d, f)
+            for r, d, f in os.walk(self.repo_path, topdown=False)
+            if str(Path(r).resolve()) in all_directories
+        ]
+        total_dirs = len(walk_triples)
+        if self.verbose:
+            iter = walk_triples
+        else:
+            iter = tqdm(walk_triples, desc="Generating documentation")
+
+        current_dir = 0
+        for root, dirs, files in iter:
+            current_dir += 1
             root = Path(root)
+            resolved_root = root.resolve()
             # Skip directories that already have documentation when resuming
             if resume and root in generated_readmes:
-                click.echo(f"Skipping {root} (already documented)")
-                continue
-
-            resolved_root = root.resolve()
-            if str(resolved_root) not in all_directories:
+                if self.verbose:
+                    click.echo(
+                        f"[{current_dir}/{total_dirs}] Skipping {root} (already documented)"
+                    )
                 continue
 
             rel_root = root.relative_to(self.repo_path)
-            if self.count_tokens:
-                click.echo(
-                    f"Processing {rel_root} (tokens used so far: {self.total_tokens:,})"
-                )
-            else:
-                click.echo(f"Processing {rel_root}")
+            if self.verbose:
+                if self.count_tokens:
+                    click.echo(
+                        f"[{current_dir}/{total_dirs}] Processing {rel_root} (tokens used so far: {self.total_tokens:,})"
+                    )
+                else:
+                    click.echo(f"[{current_dir}/{total_dirs}] Processing {rel_root}")
 
             is_repo_root = resolved_root == resolved_repo_path
 
@@ -305,6 +322,12 @@ class DocGenerator:
     type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
 )
 @click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Enable verbose output",
+)
+@click.option(
     "--model",
     default="gemini-1.5-flash-latest",
     show_default=True,
@@ -372,6 +395,7 @@ def cli(
     ignore: tuple[str],
     resume: bool,
     public: bool,
+    verbose: bool,
 ):
     "Uses AI to help understand repositories and their changes."
     generator = DocGenerator(
@@ -380,6 +404,7 @@ def cli(
         model,
         count_tokens,
         ignore_patterns=ignore,
+        verbose=verbose,
     )
     if gen:
         # Only remove existing docs if not resuming
