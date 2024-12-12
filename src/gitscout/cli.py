@@ -41,7 +41,11 @@ class DocGenerator:
         origins = [remote for remote in self.repo.remotes if remote.name == "origin"]
         if origins:
             origin = origins[0]
-            self.repo_url = origin.url.replace(".git", "").replace("git@", "https://")
+            self.repo_url = (
+                origin.url.replace(".git", "")
+                .replace("git@", "https://")
+                .replace(".com:", ".com/")
+            )
             if "github.com" in self.repo_url:
                 default_branch = origin.refs[0].remote_head if origin.refs else "main"
                 self.repo_url_file_prefix = f"{self.repo_url}/blob/{default_branch}/"
@@ -329,7 +333,7 @@ class DocGenerator:
 )
 @click.option(
     "--model",
-    default="gemini-1.5-flash-latest",
+    default="gemini-2.0-flash-exp",
     show_default=True,
     help="LLM model to use",
 )
