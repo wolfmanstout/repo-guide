@@ -1,9 +1,9 @@
-# gitscout
+# repo-guide
 
-[![PyPI](https://img.shields.io/pypi/v/gitscout.svg)](https://pypi.org/project/gitscout/)
-[![Changelog](https://img.shields.io/github/v/release/wolfmanstout/gitscout?include_prereleases&label=changelog)](https://github.com/wolfmanstout/gitscout/releases)
-[![Tests](https://github.com/wolfmanstout/gitscout/actions/workflows/test.yml/badge.svg)](https://github.com/wolfmanstout/gitscout/actions/workflows/test.yml)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/wolfmanstout/gitscout/blob/master/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/repo-guide.svg)](https://pypi.org/project/repo-guide/)
+[![Changelog](https://img.shields.io/github/v/release/wolfmanstout/repo-guide?include_prereleases&label=changelog)](https://github.com/wolfmanstout/repo-guide/releases)
+[![Tests](https://github.com/wolfmanstout/repo-guide/actions/workflows/test.yml/badge.svg)](https://github.com/wolfmanstout/repo-guide/actions/workflows/test.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/wolfmanstout/repo-guide/blob/master/LICENSE)
 
 Uses AI to help understand repositories and their changes.
 
@@ -14,7 +14,7 @@ NOTE: this has not yet been released and is still in active development.
 Install this tool using `pip` or `pipx`:
 
 ```bash
-pip install gitscout
+pip install repo-guide
 ```
 
 ## Usage
@@ -22,13 +22,13 @@ pip install gitscout
 For help, run:
 
 ```bash
-gitscout --help
+repo-guide --help
 ```
 
 You can also use:
 
 ```bash
-python -m gitscout --help
+python -m repo_guide --help
 ```
 
 ## Development
@@ -40,8 +40,8 @@ venv and run tests:
 uv run pytest
 ```
 
-To run gitscout locally, use:
+To run repo-guide locally, use:
 
 ```bash
-uv run gitscout
+uv run repo-guide
 ```

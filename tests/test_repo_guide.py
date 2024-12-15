@@ -4,7 +4,7 @@ import git
 import pytest
 from click.testing import CliRunner
 
-from gitscout.cli import DocGenerator, cli
+from repo_guide.cli import DocGenerator, cli
 
 
 def test_version():

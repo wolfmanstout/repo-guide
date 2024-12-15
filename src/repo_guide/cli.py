@@ -290,7 +290,7 @@ class DocGenerator:
 
     def write_mkdocs_configuration(self):
         config_template = textwrap.dedent("""\
-            site_name: {repo_name} docs by gitscout
+            site_name: {repo_name} docs by repo-guide
             theme: material
             exclude_docs: |
                 !.*

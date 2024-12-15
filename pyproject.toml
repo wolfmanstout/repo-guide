@@ -1,5 +1,5 @@
 [project]
-name = "gitscout"
+name = "repo-guide"
 version = "0.1.0"
 description = "Uses AI to help understand repositories and their changes."
 readme = "README.md"
@@ -25,13 +25,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.urls]
-Homepage = "https://github.com/wolfmanstout/gitscout"
-Changelog = "https://github.com/wolfmanstout/gitscout/releases"
-Issues = "https://github.com/wolfmanstout/gitscout/issues"
-CI = "https://github.com/wolfmanstout/gitscout/actions"
+Homepage = "https://github.com/wolfmanstout/repo-guide"
+Changelog = "https://github.com/wolfmanstout/repo-guide/releases"
+Issues = "https://github.com/wolfmanstout/repo-guide/issues"
+CI = "https://github.com/wolfmanstout/repo-guide/actions"
 
 [project.scripts]
-gitscout = "gitscout.cli:cli"
+repo-guide = "repo_guide.cli:cli"
 
 [dependency-groups]
 dev = [
