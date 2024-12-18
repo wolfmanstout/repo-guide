@@ -50,7 +50,7 @@ class DocGenerator:
                 default_branch = origin.refs[0].remote_head if origin.refs else "main"
                 self.repo_url_file_prefix = f"{self.repo_url}/blob/{default_branch}/"
 
-    def get_recent_changes(self, num_commits=5):
+    def get_recent_changes(self, num_commits: int = 5) -> list[dict]:
         commits = list(self.repo.iter_commits("main", max_count=num_commits))
         changes = []
 
@@ -88,7 +88,7 @@ class DocGenerator:
 
         return changes
 
-    def generate_changelog(self, changes):
+    def generate_changelog(self, changes: list[dict]) -> str:
         # Start a conversation for maintaining context
         response = self.model.prompt(
             """Generate a detailed changelog entry for the following git commits.
@@ -124,7 +124,13 @@ class DocGenerator:
         )
         return None
 
-    def _build_prompt(self, root, dirs, files, generated_readmes):
+    def _build_prompt(
+        self,
+        root: Path,
+        dirs: list[Path],
+        files: list[Path],
+        generated_readmes: dict[Path, str],
+    ) -> str:
         prompt_parts = [
             f"Current directory (path relative to repo root): {root.relative_to(self.repo_path)}\n"
         ]
@@ -170,7 +176,7 @@ class DocGenerator:
 
         return "\n=====\n\n".join(prompt_parts)
 
-    def _build_system_prompt(self, is_repo_root):
+    def _build_system_prompt(self, is_repo_root: bool) -> str:
         parts = [
             "Provide an overview of what this directory does in Markdown, "
             "including a summary of each subdirectory and file, starting with "
@@ -204,7 +210,7 @@ class DocGenerator:
                 generated_readmes[source_path] = readme.read_text()
         return generated_readmes
 
-    def generate_docs(self, resume=False):
+    def generate_docs(self, resume: bool = False) -> None:
         all_files = set(
             str((self.repo_path / f).resolve())
             for f in self.repo.git.ls_files().splitlines()
@@ -288,7 +294,7 @@ class DocGenerator:
             # Store the generated README
             generated_readmes[root] = response.text()
 
-    def write_mkdocs_configuration(self):
+    def write_mkdocs_configuration(self) -> None:
         config_template = textwrap.dedent("""\
             site_name: {repo_name} docs by repo-guide
             theme: material
@@ -400,7 +406,7 @@ def cli(
     resume: bool,
     public: bool,
     verbose: bool,
-):
+) -> None:
     "Uses AI to help understand repositories and their changes."
     generator = DocGenerator(
         repo_dir,
