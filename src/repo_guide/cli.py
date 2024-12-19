@@ -223,6 +223,8 @@ class DocGenerator:
             if d.is_relative_to(resolved_repo_path)
         )
         generated_readmes = self.load_existing_docs() if resume else {}
+        if generated_readmes:
+            click.echo("Resuming documentation. To start fresh, use --no-resume.")
         walk_triples = [
             (r, d, f)
             for r, d, f in os.walk(self.repo_path, topdown=False)
@@ -344,13 +346,15 @@ class DocGenerator:
     help="LLM model to use",
 )
 @click.option(
-    "--serve",
-    is_flag=True,
+    "--serve/--no-serve",
+    default=True,
+    show_default=True,
     help="Start local documentation server",
 )
 @click.option(
-    "--open",
-    is_flag=True,
+    "--open/--no-open",
+    default=False,
+    show_default=True,
     help="Open documentation in browser (implies --serve)",
 )
 @click.option("--port", default=8000, show_default=True, help="Port for local server")
@@ -382,8 +386,9 @@ class DocGenerator:
     help="Pattern to ignore (may be specified multiple times)",
 )
 @click.option(
-    "--resume",
-    is_flag=True,
+    "--resume/--no-resume",
+    default=True,
+    show_default=True,
     help="Resume documentation generation from last stopping point",
 )
 @click.option(

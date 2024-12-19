@@ -170,7 +170,7 @@ def test_doc_generation_end_to_end(mock_model, test_repo):
     runner = CliRunner()
     with runner.isolated_filesystem():
         # Run the CLI command with default output dir
-        result = runner.invoke(cli, [str(test_repo)])
+        result = runner.invoke(cli, [str(test_repo), "--no-serve"])
         assert result.exit_code == 0
 
         # Verify generated documentation
