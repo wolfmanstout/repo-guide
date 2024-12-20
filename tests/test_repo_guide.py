@@ -54,7 +54,7 @@ def test_prompt_construction(test_repo, tmp_path):
     files = [test_repo / "README.md"]
     prompt = generator._build_prompt(test_repo, dirs, files, generated_readmes)
 
-    expected_prompt = f"""Current directory (path relative to repo root): .
+    expected_prompt = """Current directory (path relative to repo root): .
 
 =====
 
@@ -63,8 +63,8 @@ src
 
 =====
 
-Files (paths relative to repo root):
-README.md
+Files:
+https://github.com/test/test_repo/blob/main/README.md
 ---
 # Test Repo
 
@@ -74,7 +74,7 @@ README.md
 
 Previously generated documentation (paths relative to current directory):
 
-{Path("src/README.md")}:
+src/README.md:
 ## Source Code
 Contains main application code.
 ---
@@ -95,14 +95,17 @@ def test_system_prompt_construction(test_repo, tmp_path):
     system_prompt = generator._build_system_prompt(is_repo_root=True)
 
     expected_system = (
-        "Provide an overview of what this directory does in Markdown, "
+        "Provide an explanation of what this directory does in Markdown, "
         "including a summary of each subdirectory and file, starting with "
         "the subdirectories. "
+        "Focus on the subdirectories and files that are most important or "
+        "interesting. Describe how they work together. "
+        "If a large group of files or subdirectories do something similar, provide "
+        "a summary for the group instead of summarizing each one. "
         "Omit heading level 1 (#) as it will be added automatically. "
         "If adding links to previously generated documentation, use the "
         "relative path to the file from the current directory. "
-        "Link any files mentioned to an absolute URL starting with "
-        "https://github.com/test/test_repo/blob/main/ followed by the repo-relative file path. "
+        "Link any other files mentioned to their absolute URL. "
         "Begin with an overall description of the repository. List the "
         "dependencies and how they are used."
     )

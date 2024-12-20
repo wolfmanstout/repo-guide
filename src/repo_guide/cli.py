@@ -124,6 +124,9 @@ class DocGenerator:
         )
         return None
 
+    def _forward_slash_path(self, path: Path) -> str:
+        return str(path).replace("\\", "/")
+
     def _build_prompt(
         self,
         root: Path,
@@ -132,11 +135,14 @@ class DocGenerator:
         generated_readmes: dict[Path, str],
     ) -> str:
         prompt_parts = [
-            f"Current directory (path relative to repo root): {root.relative_to(self.repo_path)}\n"
+            f"Current directory (path relative to repo root): "
+            f"{self._forward_slash_path(root.relative_to(self.repo_path))}\n"
         ]
 
         if dirs:
-            dir_list = "\n".join(str(d.relative_to(self.repo_path)) for d in dirs)
+            dir_list = "\n".join(
+                self._forward_slash_path(d.relative_to(self.repo_path)) for d in dirs
+            )
             prompt_parts.append(
                 f"Subdirectories (paths relative to repo root):\n{dir_list}\n"
             )
@@ -146,27 +152,31 @@ class DocGenerator:
             for f in files:
                 content = self._safe_read_file(f)
                 if content is not None:
+                    relative_path = self._forward_slash_path(
+                        f.relative_to(self.repo_path)
+                    )
                     file_template = textwrap.dedent("""\
-                        {path}
+                        {url}
                         ---
                         {content}
 
                         ---
                         """)
                     file_contents += file_template.format(
-                        path=f.relative_to(self.repo_path), content=content
+                        url=self.repo_url_file_prefix + relative_path
+                        if self.repo_url_file_prefix
+                        else relative_path,
+                        content=content,
                     )
             if file_contents:
-                prompt_parts.append(
-                    f"Files (paths relative to repo root):\n{file_contents}"
-                )
+                prompt_parts.append(f"Files:\n{file_contents}")
 
         if generated_readmes:
             readme_context = ""
             for subdir, content in generated_readmes.items():
                 if subdir.is_relative_to(root):
                     rel_path = subdir.relative_to(root) / "README.md"
-                    readme_context += f"\n{rel_path}:\n"
+                    readme_context += f"\n{self._forward_slash_path(rel_path)}:\n"
                     readme_context += content
                     readme_context += "\n---\n"
             if readme_context:
@@ -178,18 +188,19 @@ class DocGenerator:
 
     def _build_system_prompt(self, is_repo_root: bool) -> str:
         parts = [
-            "Provide an overview of what this directory does in Markdown, "
+            "Provide an explanation of what this directory does in Markdown, "
             "including a summary of each subdirectory and file, starting with "
             "the subdirectories. "
+            "Focus on the subdirectories and files that are most important or "
+            "interesting. Describe how they work together. "
+            "If a large group of files or subdirectories do something similar, provide "
+            "a summary for the group instead of summarizing each one. "
             "Omit heading level 1 (#) as it will be added automatically. "
             "If adding links to previously generated documentation, use the "
             "relative path to the file from the current directory."
         ]
         if self.repo_url_file_prefix:
-            parts.append(
-                "Link any files mentioned to an absolute URL starting with "
-                f"{self.repo_url_file_prefix} followed by the repo-relative file path."
-            )
+            parts.append("Link any other files mentioned to their absolute URL.")
         if is_repo_root:
             parts.append(
                 "Begin with an overall description of the repository. List the "
@@ -291,7 +302,9 @@ class DocGenerator:
                 if is_repo_root
                 else str(root.relative_to(self.repo_path))
             )
-            readme_path.write_text(f"# {dir_name}\n\n{response.text()}")
+            readme_path.write_text(
+                f"# {dir_name}\n\n{response.text()}", encoding="utf-8"
+            )
 
             # Store the generated README
             generated_readmes[root] = response.text()
@@ -323,8 +336,12 @@ class DocGenerator:
             def on_page_content(html, **kwargs):
                 return bleach.clean(html, markdown_tags, markdown_attrs)
             """)
-        Path(self.output_path / "mkdocs.yml").write_text(config_content)
-        Path(self.output_path / "my_hooks.py").write_text(hooks_content)
+        Path(self.output_path / "mkdocs.yml").write_text(
+            config_content, encoding="utf-8"
+        )
+        Path(self.output_path / "my_hooks.py").write_text(
+            hooks_content, encoding="utf-8"
+        )
 
 
 @click.command()
