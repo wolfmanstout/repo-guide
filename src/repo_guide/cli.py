@@ -23,6 +23,7 @@ class DocGenerator:
         count_tokens: bool,
         ignore_patterns: Sequence[str],
         verbose: bool = False,
+        token_budget: int = 0,
     ):
         self.repo_path = repo_path
         self.output_path = output_path
@@ -34,6 +35,7 @@ class DocGenerator:
         self.count_tokens = count_tokens
         self.total_tokens = 0
         self.ignore_patterns = ignore_patterns
+        self.token_budget = token_budget
 
         # Parse repo URL and default branch to construct file URLs
         self.repo_url = None
@@ -245,7 +247,11 @@ class DocGenerator:
         if self.verbose:
             iter = walk_triples
         else:
-            iter = tqdm(walk_triples, desc="Generating documentation")
+            iter = tqdm(
+                walk_triples,
+                desc="Generating documentation",
+                postfix={"tokens": 0} if self.count_tokens else None,
+            )
 
         current_dir = 0
         for root, dirs, files in iter:
@@ -294,6 +300,13 @@ class DocGenerator:
             if self.count_tokens:
                 self.total_tokens += response.usage().input or 0
                 self.total_tokens += response.usage().output or 0
+                if not self.verbose:
+                    iter.set_postfix({"tokens": f"{self.total_tokens:,}"})  # type: ignore
+                if self.token_budget and self.total_tokens >= self.token_budget:
+                    click.echo(
+                        f"\nToken budget of {self.token_budget:,} exceeded. To continue, set a higher --token-budget."
+                    )
+                    return
 
             readme_path = self.docs_path / rel_root / "README.md"
             readme_path.parent.mkdir(parents=True, exist_ok=True)
@@ -414,6 +427,11 @@ class DocGenerator:
     show_default=True,
     help="Serve documentation on all network interfaces (0.0.0.0). Warning: This makes docs accessible to other devices on your network.",
 )
+@click.option(
+    "--token-budget",
+    type=int,
+    help="Maximum number of tokens to use (0 for unlimited)",
+)
 def cli(
     repo_dir: Path,
     model: str,
@@ -428,6 +446,7 @@ def cli(
     resume: bool,
     public: bool,
     verbose: bool,
+    token_budget: int,
 ) -> None:
     "Uses AI to help understand repositories and their changes."
     generator = DocGenerator(
@@ -437,6 +456,7 @@ def cli(
         count_tokens,
         ignore_patterns=ignore,
         verbose=verbose,
+        token_budget=token_budget,
     )
     if gen:
         # Only remove existing docs if not resuming
