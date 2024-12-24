@@ -327,7 +327,7 @@ class DocGenerator:
             dir_name = (
                 resolved_repo_path.name
                 if is_repo_root
-                else str(root.relative_to(self.repo_path))
+                else self._forward_slash_path(root.relative_to(self.repo_path))
             )
             readme_path.write_text(
                 f"# {dir_name}\n\n{response.text()}", encoding="utf-8"
