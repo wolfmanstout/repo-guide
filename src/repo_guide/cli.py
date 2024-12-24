@@ -238,15 +238,16 @@ class DocGenerator:
         return generated_readmes
 
     def generate_docs(self, resume: bool = False) -> None:
-        all_files = set(
-            str((self.repo_path / f).resolve())
+        all_files: set[Path] = set(
+            (self.repo_path / f).resolve()
             for f in self.repo.git.ls_files().splitlines()
+            if not any(fnmatch(f, pattern) for pattern in self.ignore_patterns)
         )
         resolved_repo_path = self.repo_path.resolve()
-        all_directories = set(
-            str(d)
+        all_directories: set[Path] = set(
+            d
             for f in all_files
-            for d in Path(f).parents
+            for d in f.parents
             if d.is_relative_to(resolved_repo_path)
         )
         generated_readmes = self.load_existing_docs() if resume else {}
@@ -255,7 +256,7 @@ class DocGenerator:
         walk_triples = [
             (r, d, f)
             for r, d, f in os.walk(self.repo_path, topdown=False)
-            if str(Path(r).resolve()) in all_directories
+            if Path(r).resolve() in all_directories
         ]
         total_dirs = len(walk_triples)
         if self.verbose:
@@ -291,17 +292,8 @@ class DocGenerator:
 
             is_repo_root = resolved_root == resolved_repo_path
 
-            dirs = [
-                root / d for d in dirs if str((root / d).resolve()) in all_directories
-            ]
-            files = [
-                root / f
-                for f in files
-                if str((root / f).resolve()) in all_files
-                and not any(
-                    fnmatch(str(f), pattern) for pattern in self.ignore_patterns
-                )
-            ]
+            dirs = [root / d for d in dirs if (root / d).resolve() in all_directories]
+            files = [root / f for f in files if (root / f).resolve() in all_files]
 
             prompt = self._build_prompt(root, dirs, files, generated_readmes)
             system_prompt = self._build_system_prompt(is_repo_root)
