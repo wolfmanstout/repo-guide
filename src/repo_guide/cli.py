@@ -11,6 +11,7 @@ from pathlib import Path
 import click
 import git
 import llm
+from magika import Magika
 from mkdocs.commands.serve import serve as mkdocs_serve
 from tqdm import tqdm
 
@@ -238,13 +239,21 @@ class DocGenerator:
         return generated_readmes
 
     def generate_docs(self, resume: bool = False) -> None:
-        all_files: set[Path] = set(
+        all_files_list: list[Path] = [
             (self.repo_path / f).resolve()
             for f in self.repo.git.ls_files().splitlines()
             if not any(fnmatch(f, pattern) for pattern in self.ignore_patterns)
+        ]
+        # Filter out binary files.
+        magika = Magika()
+        magika_results = magika.identify_paths(all_files_list)
+        all_files = set(
+            f
+            for f, r in zip(all_files_list, magika_results, strict=True)
+            if r.output.is_text or f.stat().st_size == 0
         )
         resolved_repo_path = self.repo_path.resolve()
-        all_directories: set[Path] = set(
+        all_directories = set(
             d
             for f in all_files
             for d in f.parents

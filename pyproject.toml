@@ -18,6 +18,7 @@ dependencies = [
     "mkdocs-material>=9.5.46",
     "mkdocs>=1.6.1",
     "tqdm>=4.67.1",
+    "magika>=0.6.0rc3",
 ]
 
 [build-system]
