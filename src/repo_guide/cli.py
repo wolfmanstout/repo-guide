@@ -11,9 +11,14 @@ from pathlib import Path
 import click
 import git
 import llm
-from magika import Magika
 from mkdocs.commands.serve import serve as mkdocs_serve
 from tqdm import tqdm
+
+# Try to import magika, set to None if not available
+try:
+    from magika import Magika
+except ImportError:
+    Magika = None
 
 
 class DocGenerator:
@@ -26,6 +31,7 @@ class DocGenerator:
         ignore_patterns: Sequence[str],
         verbose: bool = False,
         token_budget: int = 0,
+        use_magika: bool | None = None,
     ):
         self.repo_path = repo_path
         self.output_path = output_path
@@ -38,6 +44,7 @@ class DocGenerator:
         self.total_tokens = 0
         self.ignore_patterns = ignore_patterns
         self.token_budget = token_budget
+        self.use_magika = use_magika
 
         # Parse repo URL and default branch to construct file URLs
         self.repo_url = None
@@ -244,14 +251,22 @@ class DocGenerator:
             for f in self.repo.git.ls_files().splitlines()
             if not any(fnmatch(f, pattern) for pattern in self.ignore_patterns)
         ]
-        # Filter out binary files.
-        magika = Magika()
-        magika_results = magika.identify_paths(all_files_list)
-        all_files = set(
-            f
-            for f, r in zip(all_files_list, magika_results, strict=True)
-            if r.output.is_text or f.stat().st_size == 0
-        )
+        # Filter out binary files if magika is enabled/available
+        if self.use_magika or (self.use_magika is None and Magika):
+            if not Magika:
+                raise ImportError(
+                    "Magika is not available but was explicitly requested"
+                )
+            magika = Magika()
+            magika_results = magika.identify_paths(all_files_list)
+            all_files = set(
+                f
+                for f, r in zip(all_files_list, magika_results, strict=True)
+                if r.output.is_text or f.stat().st_size == 0
+            )
+        else:
+            all_files = set(all_files_list)
+
         resolved_repo_path = self.repo_path.resolve()
         all_directories = set(
             d
@@ -447,6 +462,11 @@ class DocGenerator:
     type=int,
     help="Maximum number of tokens to use (0 for unlimited)",
 )
+@click.option(
+    "--magika/--no-magika",
+    default=None,
+    help="Use magika to filter binary files (default: auto-detect)",
+)
 def cli(
     repo_dir: Path,
     model: str,
@@ -462,6 +482,7 @@ def cli(
     public: bool,
     verbose: bool,
     token_budget: int,
+    magika: bool | None,
 ) -> None:
     "Uses AI to help understand repositories and their changes."
     generator = DocGenerator(
@@ -472,6 +493,7 @@ def cli(
         ignore_patterns=ignore,
         verbose=verbose,
         token_budget=token_budget,
+        use_magika=magika,
     )
 
     # Create docs directory and write mkdocs config

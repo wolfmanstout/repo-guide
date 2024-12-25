@@ -1031,10 +1031,14 @@ dependencies = [
     { name = "gitpython" },
     { name = "llm" },
     { name = "llm-gemini" },
-    { name = "magika" },
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "tqdm" },
+]
+
+[package.optional-dependencies]
+magika = [
+    { name = "magika" },
 ]
 
 [package.dev-dependencies]
@@ -1050,7 +1054,7 @@ requires-dist = [
     { name = "gitpython", specifier = ">=3.1.43" },
     { name = "llm", specifier = ">=0.19a0" },
     { name = "llm-gemini", specifier = ">=0.5a0" },
-    { name = "magika", specifier = ">=0.6.0rc3" },
+    { name = "magika", marker = "extra == 'magika'", specifier = ">=0.6.0rc3" },
     { name = "mkdocs", specifier = ">=1.6.1" },
     { name = "mkdocs-material", specifier = ">=9.5.46" },
     { name = "tqdm", specifier = ">=4.67.1" },
