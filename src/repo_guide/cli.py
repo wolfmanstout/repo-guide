@@ -249,7 +249,9 @@ class DocGenerator:
         all_files_list: list[Path] = [
             (self.repo_path / f).resolve()
             for f in self.repo.git.ls_files().splitlines()
-            if not any(fnmatch(f, pattern) for pattern in self.ignore_patterns)
+            if not any(
+                fnmatch(Path(f).name, pattern) for pattern in self.ignore_patterns
+            )
         ]
         # Filter out binary files if magika is enabled/available
         if self.use_magika:
