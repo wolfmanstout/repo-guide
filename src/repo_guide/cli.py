@@ -31,7 +31,7 @@ class DocGenerator:
         ignore_patterns: Sequence[str],
         verbose: bool = False,
         token_budget: int = 0,
-        use_magika: bool | None = None,
+        use_magika: bool = False,
     ):
         self.repo_path = repo_path
         self.output_path = output_path
@@ -252,7 +252,7 @@ class DocGenerator:
             if not any(fnmatch(f, pattern) for pattern in self.ignore_patterns)
         ]
         # Filter out binary files if magika is enabled/available
-        if self.use_magika or (self.use_magika is None and Magika):
+        if self.use_magika:
             if not Magika:
                 raise ImportError(
                     "Magika is not available but was explicitly requested"
@@ -265,7 +265,23 @@ class DocGenerator:
                 if r.output.is_text or f.stat().st_size == 0
             )
         else:
-            all_files = set(all_files_list)
+            # Use GitHub's eol attribute to filter out binary files
+            is_binary_files = []
+            for line in self.repo.git.ls_files(eol=True).splitlines():
+                # Avoid parsing the file path
+                parts = line.split(None, 3)
+                working_tree_info = next(
+                    (p for p in parts[:-1] if p.startswith("w/")), None
+                )
+                if working_tree_info:
+                    is_binary_files.append(working_tree_info[2:] == "-text")
+                else:
+                    click.echo(f"Error parsing ls-files output: {line}")
+            all_files = set(
+                f
+                for f, is_binary in zip(all_files_list, is_binary_files, strict=True)
+                if not is_binary
+            )
 
         resolved_repo_path = self.repo_path.resolve()
         all_directories = set(
@@ -464,8 +480,8 @@ class DocGenerator:
 )
 @click.option(
     "--magika/--no-magika",
-    default=None,
-    help="Use magika to filter binary files (default: auto-detect)",
+    default=False,
+    help="Use magika to filter binary files. Requires 'magika' extra.",
 )
 def cli(
     repo_dir: Path,
@@ -482,7 +498,7 @@ def cli(
     public: bool,
     verbose: bool,
     token_budget: int,
-    magika: bool | None,
+    magika: bool,
 ) -> None:
     "Uses AI to help understand repositories and their changes."
     generator = DocGenerator(
