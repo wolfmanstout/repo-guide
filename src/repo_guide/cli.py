@@ -2,6 +2,7 @@ import os
 import shutil
 import textwrap
 import threading
+import time
 import webbrowser
 from collections.abc import Sequence
 from datetime import datetime
@@ -72,6 +73,24 @@ class DocGenerator:
         if not self.repo_url_file_prefix:
             click.echo("Unable to determine repository file URL prefix")
 
+    def _prompt_with_backoff(self, prompt: str, system: str = "") -> llm.Response:
+        """Make model.prompt call with exponential backoff."""
+        max_attempts = 5
+        base_wait = 2  # seconds
+
+        for attempt in range(max_attempts):
+            try:
+                response = self.model.prompt(prompt, system=system)
+                response.text()  # Trigger any exceptions
+                return response
+            except llm.ModelError as e:
+                if attempt == max_attempts - 1:
+                    raise
+                wait_time = base_wait * (2**attempt)
+                if self.verbose:
+                    click.echo(f"Model error: {e}. Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+
     def get_recent_changes(self, num_commits: int = 5) -> list[dict]:
         commits = list(self.repo.iter_commits("main", max_count=num_commits))
         changes = []
@@ -112,7 +131,7 @@ class DocGenerator:
 
     def generate_changelog(self, changes: list[dict]) -> str:
         # Start a conversation for maintaining context
-        response = self.model.prompt(
+        response = self._prompt_with_backoff(
             """Generate a detailed changelog entry for the following git commits.
             Focus on user-facing changes and group similar changes together.
             Format the output in markdown with appropriate headers and bullet points.
@@ -328,7 +347,7 @@ class DocGenerator:
             prompt = self._build_prompt(root, files, generated_readmes)
             system_prompt = self._build_system_prompt(is_repo_root)
 
-            response = self.model.prompt(
+            response = self._prompt_with_backoff(
                 prompt,
                 system=system_prompt,
             )
