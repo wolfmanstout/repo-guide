@@ -200,7 +200,7 @@ class DocGenerator:
     def _build_system_prompt(self, is_repo_root: bool) -> str:
         parts = [
             "You are a principal software engineer. Your responses will be used to build a field guide to a code repository. "
-            "Analyze the provided XML and explain what <current_directory> does in Markdown. "
+            "Analyze the provided XML and explain what <current_directory> does in Markdown. Do not refer to the XML tags themselves in your response. "
             "The <current_directory> <path> is relative to the path to the repo. "
             "The <subdirectories> tag contains subdirectories of <current_directory>, each in its own <subdirectory> tag with <path>, <link_url>, and <readme>. "
             "Each <readme> is a doc that you previously authored for the field guide. "
