@@ -53,39 +53,86 @@ def test_prompt_construction(test_repo, tmp_path):
     }
 
     # Test prompt construction
-    dirs = [test_repo / "src", test_repo / "src/utils"]
     files = [test_repo / "README.md"]
-    prompt = generator._build_prompt(test_repo, dirs, files, generated_readmes)
+    prompt = generator._build_prompt(test_repo, files, generated_readmes)
 
     expected_prompt = """\
-<current_directory>.</current_directory>
+<current_directory>
+<path>.</path>
 
 <subdirectories>
-<subdirectory>src</subdirectory>
-<subdirectory>src/utils</subdirectory>
+<subdirectory>
+<path>src</path>
+<link_url>src/README.md</link_url>
+<readme>
+## Source Code
+Contains main application code.
+</readme>
+</subdirectory>
+<subdirectory>
+<path>src/utils</path>
+<link_url>src/utils/README.md</link_url>
+<readme>
+## Utilities
+Helper functions and utilities.
+</readme>
+</subdirectory>
 </subdirectories>
 
 <files>
 <file>
-<url>https://github.com/test/test_repo/blob/main/README.md</url>
+<path>README.md</path>
+<link_url>https://github.com/test/test_repo/blob/main/README.md</link_url>
 <content>
 # Test Repo
 </content>
 </file>
 </files>
+</current_directory>"""
 
-<existing_docs>
+    assert prompt == expected_prompt
+
+
+def test_subdirectory_prompt_construction(test_repo: Path, tmp_path: Path) -> None:
+    generator = DocGenerator(
+        repo_path=test_repo,
+        output_path=tmp_path / "output",
+        model_name="",
+        count_tokens=False,
+        ignore_patterns=[],
+    )
+    generated_readmes = {
+        test_repo / "src/utils": "## Utilities\nHelper functions and utilities.",
+    }
+    files = [test_repo / "src/main.py"]
+    prompt = generator._build_prompt(test_repo / "src", files, generated_readmes)
+
+    expected_prompt = """\
+<current_directory>
+<path>src</path>
+
+<subdirectories>
+<subdirectory>
+<path>utils</path>
+<link_url>utils/README.md</link_url>
 <readme>
-<url>src/README.md</url>
-<content>## Source Code
-Contains main application code.</content>
+## Utilities
+Helper functions and utilities.
 </readme>
-<readme>
-<url>src/utils/README.md</url>
-<content>## Utilities
-Helper functions and utilities.</content>
-</readme>
-</existing_docs>"""
+</subdirectory>
+</subdirectories>
+
+<files>
+<file>
+<path>main.py</path>
+<link_url>https://github.com/test/test_repo/blob/main/src/main.py</link_url>
+<content>
+def main():
+    pass
+</content>
+</file>
+</files>
+</current_directory>"""
 
     assert prompt == expected_prompt
 
@@ -103,15 +150,16 @@ def test_system_prompt_construction(test_repo, tmp_path):
 
     expected_system = (
         "You are repo-guide. Your responses will be used to build a field guide to a code repository. "
-        "Analyze the provided XML and explain what the current directory does in Markdown. "
-        "The <current_directory> tag contains the current directory relative to repo root. "
-        "The <subdirectories> tag lists every <subdirectory> relative to repo root. "
-        "The <files> tag contains files in the current directory, each in its own <file> tag with <url> and <content>. "
-        "The <existing_docs> tag contains docs you previously generated in <readme> tags with <url> and <content>. "
+        "Analyze the provided XML and explain what <current_directory> does in Markdown. "
+        "The <current_directory> <path> is relative to the path to the repo. "
+        "The <subdirectories> tag contains subdirectories of <current_directory>, each in its own <subdirectory> tag with <path>, <link_url>, and <readme>. "
+        "Each <readme> is a doc that you previously generated. "
+        "The <files> tag contains files in the current directory, each in its own <file> tag with <path>, <link_url>, and <content>. "
+        "Each <subdirectory> <path> and <file> <path> is relative to <current_directory> <path>. "
         "Focus on the subdirectories and files that are most important or interesting. Describe how they work together. "
         "If a large group of files or subdirectories do something similar, provide a summary for the group instead of summarizing each one. "
         "Omit heading level 1 (#) as it will be added automatically. "
-        "Link any <file> or <readme> references to its provided <url> without modification. "
+        "Refer to any <file> or <subdirectory> by its <path> and hyperlink it to its <link_url> without modification. "
         "Begin with an overall description of the repository. List the "
         "dependencies and how they are used."
     )
@@ -143,7 +191,7 @@ def test_file_decoding_failures(test_repo, tmp_path, capfd):
         test_repo / "broken.txt",
     ]
 
-    prompt = generator._build_prompt(test_repo, [], files, {})
+    prompt = generator._build_prompt(test_repo, files, {})
 
     # Verify only readable files are in prompt
     assert "utf8.txt" in prompt

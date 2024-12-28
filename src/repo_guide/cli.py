@@ -32,7 +32,7 @@ class DocGenerator:
         verbose: bool = False,
         token_budget: int = 0,
         use_magika: bool = False,
-    ):
+    ) -> None:
         self.repo_path = repo_path
         self.output_path = output_path
         self.docs_path = output_path / "docs"
@@ -152,73 +152,64 @@ class DocGenerator:
     def _build_prompt(
         self,
         root: Path,
-        dirs: list[Path],
         files: list[Path],
         generated_readmes: dict[Path, str],
     ) -> str:
-        prompt_parts = [
-            f"<current_directory>{self._forward_slash_path(root.relative_to(self.repo_path))}</current_directory>\n"
-        ]
+        prompt_parts: list[str] = []
+        prompt_parts.append("<current_directory>")
+        prompt_parts.append(
+            f"<path>{self._forward_slash_path(root.relative_to(self.repo_path))}</path>\n"
+        )
 
-        if dirs:
-            dir_list = "\n".join(
-                f"<subdirectory>{self._forward_slash_path(d.relative_to(self.repo_path))}</subdirectory>"
-                for d in dirs
-            )
-            prompt_parts.append(f"<subdirectories>\n{dir_list}\n</subdirectories>\n")
+        subdirs = [p for p in generated_readmes if p.is_relative_to(root) and p != root]
+        # List subdirectories in order of depth.
+        subdirs.sort(key=lambda p: len(p.parts))
+        if subdirs:
+            prompt_parts.append("<subdirectories>")
+            for d in subdirs:
+                root_rel_path = self._forward_slash_path(d.relative_to(root))
+                prompt_parts.append("<subdirectory>")
+                prompt_parts.append(f"<path>{root_rel_path}</path>")
+                prompt_parts.append(f"<link_url>{root_rel_path}/README.md</link_url>")
+                prompt_parts.append(f"<readme>\n{generated_readmes[d]}\n</readme>")
+                prompt_parts.append("</subdirectory>")
+            prompt_parts.append("</subdirectories>\n")
 
         if files:
-            file_contents = ""
+            prompt_parts.append("<files>")
             for f in files:
                 content = self._safe_read_file(f)
                 if content is not None:
-                    relative_path = self._forward_slash_path(
+                    repo_rel_path = self._forward_slash_path(
                         f.relative_to(self.repo_path)
                     )
-                    file_template = textwrap.dedent("""\
-                        <file>
-                        <url>{url}</url>
-                        <content>
-                        {content}
-                        </content>
-                        </file>
-                        """)
-                    file_contents += file_template.format(
-                        url=self.repo_url_file_prefix + relative_path
-                        if self.repo_url_file_prefix
-                        else relative_path,
-                        content=content,
-                    )
-            if file_contents:
-                prompt_parts.append(f"<files>\n{file_contents}</files>\n")
+                    root_rel_path = self._forward_slash_path(f.relative_to(root))
+                    prompt_parts.append("<file>")
+                    prompt_parts.append(f"<path>{root_rel_path}</path>")
+                    if self.repo_url_file_prefix:
+                        prompt_parts.append(
+                            f"<link_url>{self.repo_url_file_prefix}{repo_rel_path}</link_url>"
+                        )
+                    prompt_parts.append(f"<content>\n{content}\n</content>")
+                    prompt_parts.append("</file>")
+            prompt_parts.append("</files>")
 
-        if generated_readmes:
-            readme_context = ""
-            for subdir, content in generated_readmes.items():
-                if subdir.is_relative_to(root):
-                    rel_path = subdir.relative_to(root) / "README.md"
-                    readme_context += (
-                        f"<readme>\n<url>{self._forward_slash_path(rel_path)}</url>\n"
-                    )
-                    readme_context += f"<content>{content}</content>\n</readme>\n"
-            if readme_context:
-                prompt_parts.append(
-                    f"<existing_docs>\n{readme_context}</existing_docs>"
-                )
-
+        prompt_parts.append("</current_directory>")
         return "\n".join(prompt_parts)
 
     def _build_system_prompt(self, is_repo_root: bool) -> str:
         parts = [
-            "You are repo-guide. Your responses will be used to build a field guide to a code repository. Analyze the provided XML and explain what the current directory does in Markdown. "
-            "The <current_directory> tag contains the current directory relative to repo root. "
-            "The <subdirectories> tag lists every <subdirectory> relative to repo root. "
-            "The <files> tag contains files in the current directory, each in its own <file> tag with <url> and <content>. "
-            "The <existing_docs> tag contains docs you previously generated in <readme> tags with <url> and <content>. "
+            "You are repo-guide. Your responses will be used to build a field guide to a code repository. "
+            "Analyze the provided XML and explain what <current_directory> does in Markdown. "
+            "The <current_directory> <path> is relative to the path to the repo. "
+            "The <subdirectories> tag contains subdirectories of <current_directory>, each in its own <subdirectory> tag with <path>, <link_url>, and <readme>. "
+            "Each <readme> is a doc that you previously generated. "
+            "The <files> tag contains files in the current directory, each in its own <file> tag with <path>, <link_url>, and <content>. "
+            "Each <subdirectory> <path> and <file> <path> is relative to <current_directory> <path>. "
             "Focus on the subdirectories and files that are most important or interesting. Describe how they work together. "
             "If a large group of files or subdirectories do something similar, provide a summary for the group instead of summarizing each one. "
             "Omit heading level 1 (#) as it will be added automatically. "
-            "Link any <file> or <readme> references to its provided <url> without modification."
+            "Refer to any <file> or <subdirectory> by its <path> and hyperlink it to its <link_url> without modification."
         ]
         if is_repo_root:
             parts.append(
@@ -309,7 +300,7 @@ class DocGenerator:
             )
 
         current_dir = 0
-        for root, dirs, files in iter:
+        for root, _, files in iter:
             current_dir += 1
             root = Path(root)
             resolved_root = root.resolve()
@@ -332,12 +323,9 @@ class DocGenerator:
 
             is_repo_root = resolved_root == resolved_repo_path
 
-            dirs = [
-                root / d for d in dirs if (root / d).resolve() in filtered_directories
-            ]
             files = [root / f for f in files if (root / f).resolve() in filtered_files]
 
-            prompt = self._build_prompt(root, dirs, files, generated_readmes)
+            prompt = self._build_prompt(root, files, generated_readmes)
             system_prompt = self._build_system_prompt(is_repo_root)
 
             response = self.model.prompt(
@@ -478,6 +466,7 @@ class DocGenerator:
 @click.option(
     "--token-budget",
     type=int,
+    default=0,
     help="Maximum number of tokens to use (0 for unlimited)",
 )
 @click.option(
@@ -495,7 +484,7 @@ def cli(
     count_tokens: bool,
     output_dir: Path,
     include_changelog: bool,
-    ignore: tuple[str],
+    ignore: tuple[str, ...],
     resume: bool,
     public: bool,
     verbose: bool,
