@@ -12,6 +12,7 @@ from pathlib import Path
 import click
 import git
 import llm
+import tiktoken
 from mkdocs.commands.serve import serve as mkdocs_serve
 from tqdm import tqdm
 
@@ -33,6 +34,7 @@ class DocGenerator:
         verbose: bool = False,
         token_budget: int = 0,
         use_magika: bool = False,
+        files_token_limit: int = 0,
     ) -> None:
         self.repo_path = repo_path
         self.output_path = output_path
@@ -46,6 +48,11 @@ class DocGenerator:
         self.ignore_patterns = ignore_patterns
         self.token_budget = token_budget
         self.use_magika = use_magika
+        self.files_token_limit = files_token_limit
+        # Encoding used by gpt-4o.
+        self.token_encoding = (
+            tiktoken.get_encoding("o200k_base") if files_token_limit else None
+        )
 
         # Parse repo URL and default branch to construct file URLs
         self.repo_url = None
@@ -90,6 +97,7 @@ class DocGenerator:
                 if self.verbose:
                     click.echo(f"Model error: {e}. Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
+        raise AssertionError("Unreachable code")
 
     def get_recent_changes(self, num_commits: int = 5) -> list[dict]:
         commits = list(self.repo.iter_commits("main", max_count=num_commits))
@@ -196,9 +204,19 @@ class DocGenerator:
 
         if files:
             prompt_parts.append("<files>")
+            total_file_tokens = 0
             for f in files:
                 content = self._safe_read_file(f)
                 if content is not None:
+                    if self.files_token_limit:
+                        file_tokens = len(self.token_encoding.encode(content))  # type: ignore
+                        if total_file_tokens + file_tokens > self.files_token_limit:
+                            click.echo(
+                                f"\nTruncating <files> in {root} due to --files-token-limit."
+                            )
+                            break
+                        total_file_tokens += file_tokens
+
                     repo_rel_path = self._forward_slash_path(
                         f.relative_to(self.repo_path)
                     )
@@ -481,7 +499,10 @@ class DocGenerator:
     "--public/--local",
     default=False,
     show_default=True,
-    help="Serve documentation on all network interfaces (0.0.0.0). Warning: This makes docs accessible to other devices on your network.",
+    help=(
+        "Serve documentation on all network interfaces (0.0.0.0). "
+        "Warning: This makes docs accessible to other devices on your network."
+    ),
 )
 @click.option(
     "--token-budget",
@@ -493,6 +514,15 @@ class DocGenerator:
     "--magika/--no-magika",
     default=False,
     help="Use magika to filter binary files. Requires 'magika' extra.",
+)
+@click.option(
+    "--files-token-limit",
+    type=int,
+    default=0,
+    help=(
+        "Maximum number of tokens for total file contents in a directory "
+        "(0 for unlimited). Truncate file list if exceeded."
+    ),
 )
 def cli(
     repo_dir: Path,
@@ -510,6 +540,7 @@ def cli(
     verbose: bool,
     token_budget: int,
     magika: bool,
+    files_token_limit: int,
 ) -> None:
     "Uses AI to help understand repositories and their changes."
     generator = DocGenerator(
@@ -521,6 +552,7 @@ def cli(
         verbose=verbose,
         token_budget=token_budget,
         use_magika=magika,
+        files_token_limit=files_token_limit,
     )
 
     # Create docs directory and write mkdocs config
