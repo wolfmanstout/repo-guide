@@ -237,7 +237,7 @@ class DocGenerator:
     def _build_system_prompt(self, is_repo_root: bool) -> str:
         parts = [
             "You are a principal software engineer. Your responses will be used to build a field guide to a code repository. "
-            "Analyze the provided XML and explain what <current_directory> does in Markdown. Do not refer to the XML tags themselves in your response. "
+            "Analyze the provided XML and explain what <current_directory> does in Markdown. "
             "The <current_directory> <path> is relative to the path to the repo. "
             "The <subdirectories> tag contains subdirectories of <current_directory>, each in its own <subdirectory> tag with <path>, <link_url>, and <readme>. "
             "Each <readme> is a doc that you previously authored for the field guide. "
@@ -245,8 +245,11 @@ class DocGenerator:
             "Each <subdirectory> <path> and <file> <path> is relative to <current_directory> <path>. "
             "Focus on the subdirectories and files that are most important or interesting. Describe how they work together. "
             "If a large group of files or subdirectories do something similar, provide a summary for the group instead of summarizing each one. "
+            "Refer to any <file> or <subdirectory> by its <path> and hyperlink it to its <link_url> without modification. "
+            "Output Markdown compatible with John Gruber's reference implementation, for use in MkDocs. "
+            "For example, always add a blank line before a list. "
+            'Do not refer to the XML tags used to describe the input (e.g. "<current_directory>") in your response. '
             "Omit heading level 1 (#) as it will be added automatically. "
-            "Refer to any <file> or <subdirectory> by its <path> and hyperlink it to its <link_url> without modification."
         ]
         if is_repo_root:
             parts.append(
