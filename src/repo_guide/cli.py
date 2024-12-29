@@ -394,6 +394,7 @@ class DocGenerator:
 
             # Store the generated README
             generated_readmes[root] = response.text()
+        click.echo("Documentation generation complete.")
 
     def write_mkdocs_configuration(self) -> None:
         config_template = textwrap.dedent("""\
@@ -611,6 +612,7 @@ def cli(
 
     # If serving, keep the main thread alive
     if server_thread:
+        click.echo(f"Server running at http://127.0.0.1:{port}/. Press Ctrl+C to stop.")
         try:
             while True:
                 server_thread.join(1.0)
