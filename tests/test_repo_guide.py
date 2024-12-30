@@ -18,29 +18,29 @@ def test_version():
 @pytest.fixture
 def test_repo(tmp_path):
     """Create a test repository with some sample files."""
-    repo_path = tmp_path / "test_repo"
-    repo_path.mkdir()
+    input_dir = tmp_path / "test_repo"
+    input_dir.mkdir()
 
     # Create nested directory structure
-    (repo_path / "src").mkdir()
-    (repo_path / "src/main.py").write_text("def main():\n    pass")
-    (repo_path / "src/utils").mkdir()
-    (repo_path / "src/utils/helpers.py").write_text("def helper():\n    pass")
-    (repo_path / "README.md").write_text("# Test Repo")
+    (input_dir / "src").mkdir()
+    (input_dir / "src/main.py").write_text("def main():\n    pass")
+    (input_dir / "src/utils").mkdir()
+    (input_dir / "src/utils/helpers.py").write_text("def helper():\n    pass")
+    (input_dir / "README.md").write_text("# Test Repo")
 
     # Initialize git repo with a remote and commit files
-    repo = git.Repo.init(repo_path, initial_branch="main")
+    repo = git.Repo.init(input_dir, initial_branch="main")
     repo.create_remote("origin", "https://github.com/test/test_repo.git")
     repo.index.add(["src/main.py", "src/utils/helpers.py", "README.md"])
     repo.index.commit("Initial commit")
 
-    return repo_path
+    return input_dir
 
 
 def test_prompt_construction(test_repo, tmp_path):
     generator = DocGenerator(
-        repo_path=test_repo,
-        output_path=tmp_path / "output",
+        input_dir=test_repo,
+        output_dir=tmp_path / "output",
         model_name="",
         count_tokens=False,
         ignore_patterns=[],
@@ -58,7 +58,7 @@ def test_prompt_construction(test_repo, tmp_path):
 
     expected_prompt = """\
 <current_directory>
-<path>.</path>
+<path>test_repo</path>
 
 <subdirectories>
 <subdirectory>
@@ -95,8 +95,8 @@ Helper functions and utilities.
 
 def test_subdirectory_prompt_construction(test_repo: Path, tmp_path: Path) -> None:
     generator = DocGenerator(
-        repo_path=test_repo,
-        output_path=tmp_path / "output",
+        input_dir=test_repo,
+        output_dir=tmp_path / "output",
         model_name="",
         count_tokens=False,
         ignore_patterns=[],
@@ -109,7 +109,7 @@ def test_subdirectory_prompt_construction(test_repo: Path, tmp_path: Path) -> No
 
     expected_prompt = """\
 <current_directory>
-<path>src</path>
+<path>test_repo/src</path>
 
 <subdirectories>
 <subdirectory>
@@ -148,8 +148,8 @@ def test_file_decoding_failures(test_repo, tmp_path, capfd):
     bad_file.write_bytes(b"Hello\x00 \x00W\x00o\x00r\x00l\x00d")  # UTF-16LE without BOM
 
     generator = DocGenerator(
-        repo_path=test_repo,
-        output_path=tmp_path / "output",
+        input_dir=test_repo,
+        output_dir=tmp_path / "output",
         model_name="",
         count_tokens=False,
         ignore_patterns=[],
@@ -167,6 +167,39 @@ def test_file_decoding_failures(test_repo, tmp_path, capfd):
     assert "utf8.txt" in prompt
     assert "latin1.txt" in prompt
     assert "binary.dat" not in prompt
+
+
+def test_repo_url(test_repo: Path, tmp_path: Path) -> None:
+    """Test repo URL construction when using a subdirectory."""
+    generator = DocGenerator(
+        input_dir=test_repo,
+        output_dir=tmp_path / "output",
+        model_name="",
+        count_tokens=False,
+        ignore_patterns=[],
+    )
+
+    assert generator.repo_url == "https://github.com/test/test_repo"
+    assert (
+        generator.repo_url_file_prefix == "https://github.com/test/test_repo/blob/main/"
+    )
+
+
+def test_repo_url_with_subdirectory(test_repo: Path, tmp_path: Path) -> None:
+    """Test repo URL construction when using a subdirectory."""
+    generator = DocGenerator(
+        input_dir=test_repo / "src",
+        output_dir=tmp_path / "output",
+        model_name="",
+        count_tokens=False,
+        ignore_patterns=[],
+    )
+
+    assert generator.repo_url == "https://github.com/test/test_repo"
+    assert (
+        generator.repo_url_file_prefix
+        == "https://github.com/test/test_repo/blob/main/src/"
+    )
 
 
 @pytest.fixture
@@ -197,7 +230,9 @@ def test_doc_generation_end_to_end(mock_model, test_repo):
     runner = CliRunner()
     with runner.isolated_filesystem():
         # Run the CLI command with default output dir
-        result = runner.invoke(cli, [str(test_repo), "--no-serve"])
+        result = runner.invoke(
+            cli, [str(test_repo), "--no-serve"], catch_exceptions=False
+        )
         assert result.exit_code == 0
 
         # Verify generated documentation
@@ -211,4 +246,24 @@ def test_doc_generation_end_to_end(mock_model, test_repo):
 
         utils_readme = Path("generated_docs/docs/src/utils/README.md")
         assert utils_readme.exists()
-        assert utils_readme.read_text() == "# src/utils\n\n<curr..."
+        assert utils_readme.read_text() == "# utils\n\n<curr..."
+
+
+def test_doc_generation_src_directory(mock_model, test_repo):
+    """Test documentation generation for src directory using CLI."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        # Run the CLI command with src directory path
+        result = runner.invoke(
+            cli, [str(test_repo / "src"), "--no-serve"], catch_exceptions=False
+        )
+        assert result.exit_code == 0
+
+        # Verify generated documentation
+        src_readme = Path("generated_docs/docs/README.md")
+        assert src_readme.exists()
+        assert src_readme.read_text() == "# src\n\n<curr..."
+
+        utils_readme = Path("generated_docs/docs/utils/README.md")
+        assert utils_readme.exists()
+        assert utils_readme.read_text() == "# utils\n\n<curr..."

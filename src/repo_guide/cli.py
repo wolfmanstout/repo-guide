@@ -26,8 +26,8 @@ except ImportError:
 class DocGenerator:
     def __init__(
         self,
-        repo_path: Path,
-        output_path: Path,
+        input_dir: Path,
+        output_dir: Path,
         model_name: str,
         count_tokens: bool,
         ignore_patterns: Sequence[str],
@@ -36,10 +36,14 @@ class DocGenerator:
         use_magika: bool = False,
         files_token_limit: int = 0,
     ) -> None:
-        self.repo_path = repo_path
-        self.output_path = output_path
-        self.docs_path = output_path / "docs"
-        self.repo = git.Repo(repo_path)
+        self.input_dir = input_dir
+        self.output_dir = output_dir
+        self.docs_dir = output_dir / "docs"
+        self.repo = git.Repo(input_dir, search_parent_directories=True)
+        self.resolved_repo_dir = Path(self.repo.working_dir).resolve()
+        self.repo_relative_input_dir = self.input_dir.resolve().relative_to(
+            self.resolved_repo_dir
+        )
         self.model = llm.get_model(model_name) if model_name else llm.get_model()
         self.verbose = verbose
         click.echo(f"Using model: {self.model.model_id}")
@@ -67,14 +71,20 @@ class DocGenerator:
                 .replace(".com:", ".com/")
             )
             if "github.com" in self.repo_url:
+                current_branch = None
                 try:
                     current_branch = self.repo.active_branch.name
-                    self.repo_url_file_prefix = (
-                        f"{self.repo_url}/blob/{current_branch}/"
-                    )
                 except TypeError:
                     click.echo("Unable to determine current branch")
-                    pass
+                if current_branch:
+                    repo_subdir_str = (
+                        self._forward_slash_path(self.repo_relative_input_dir) + "/"
+                        if self.repo_relative_input_dir != Path(".")
+                        else ""
+                    )
+                    self.repo_url_file_prefix = (
+                        f"{self.repo_url}/blob/{current_branch}/{repo_subdir_str}"
+                    )
         if not self.repo_url:
             click.echo("Unable to determine repository URL")
         if not self.repo_url_file_prefix:
@@ -184,9 +194,11 @@ class DocGenerator:
     ) -> str:
         prompt_parts: list[str] = []
         prompt_parts.append("<current_directory>")
-        prompt_parts.append(
-            f"<path>{self._forward_slash_path(root.relative_to(self.repo_path))}</path>\n"
+        # Include input directory name as it is often helpful context.
+        current_directory = self._forward_slash_path(
+            root.resolve().relative_to(self.input_dir.resolve().parent)
         )
+        prompt_parts.append(f"<path>{current_directory}</path>\n")
 
         subdirs = [p for p in generated_readmes if p.is_relative_to(root) and p != root]
         # List subdirectories in order of depth.
@@ -217,15 +229,15 @@ class DocGenerator:
                             break
                         total_file_tokens += file_tokens
 
-                    repo_rel_path = self._forward_slash_path(
-                        f.relative_to(self.repo_path)
+                    input_rel_path = self._forward_slash_path(
+                        f.relative_to(self.input_dir)
                     )
                     root_rel_path = self._forward_slash_path(f.relative_to(root))
                     prompt_parts.append("<file>")
                     prompt_parts.append(f"<path>{root_rel_path}</path>")
                     if self.repo_url_file_prefix:
                         prompt_parts.append(
-                            f"<link_url>{self.repo_url_file_prefix}{repo_rel_path}</link_url>"
+                            f"<link_url>{self.repo_url_file_prefix}{input_rel_path}</link_url>"
                         )
                     prompt_parts.append(f"<content>\n{content}\n</content>")
                     prompt_parts.append("</file>")
@@ -261,20 +273,20 @@ class DocGenerator:
     def load_existing_docs(self) -> dict[Path, str]:
         """Load existing documentation from the filesystem."""
         generated_readmes = {}
-        if not self.docs_path.exists():
+        if not self.docs_dir.exists():
             return generated_readmes
 
-        for readme in self.docs_path.rglob("README.md"):
-            rel_path = readme.parent.relative_to(self.docs_path)
-            source_path = self.repo_path / rel_path
+        for readme in self.docs_dir.rglob("README.md"):
+            rel_path = readme.parent.relative_to(self.docs_dir)
+            source_path = self.input_dir / rel_path
             if source_path.exists():
                 generated_readmes[source_path] = readme.read_text()
         return generated_readmes
 
     def generate_docs(self, resume: bool = False) -> None:
         all_files: list[Path] = [
-            (self.repo_path / f).resolve()
-            for f in self.repo.git.ls_files().splitlines()
+            self.resolved_repo_dir / f
+            for f in self.repo.git.ls_files(self.repo_relative_input_dir).splitlines()
         ]
         # Filter out binary files if magika is enabled/available
         if self.use_magika:
@@ -292,7 +304,9 @@ class DocGenerator:
         else:
             # Use GitHub's eol attribute to filter out binary files
             is_binary_files = []
-            for line in self.repo.git.ls_files(eol=True).splitlines():
+            for line in self.repo.git.ls_files(
+                self.repo_relative_input_dir, eol=True
+            ).splitlines():
                 # Avoid parsing the file path
                 parts = line.split(None, 3)
                 working_tree_info = next(
@@ -314,19 +328,19 @@ class DocGenerator:
             if not any(fnmatch(f.name, pattern) for pattern in self.ignore_patterns)
         )
 
-        resolved_repo_path = self.repo_path.resolve()
+        resolved_input_dir = self.input_dir.resolve()
         filtered_directories = set(
             d
             for f in filtered_files
             for d in f.parents
-            if d.is_relative_to(resolved_repo_path)
+            if d.is_relative_to(resolved_input_dir)
         )
         generated_readmes = self.load_existing_docs() if resume else {}
         if generated_readmes:
             click.echo("Resuming documentation. To start fresh, use --no-resume.")
         walk_triples = [
             (r, d, f)
-            for r, d, f in os.walk(self.repo_path, topdown=False)
+            for r, d, f in os.walk(self.input_dir, topdown=False)
             if Path(r).resolve() in filtered_directories
         ]
         total_dirs = len(walk_triples)
@@ -352,7 +366,7 @@ class DocGenerator:
                     )
                 continue
 
-            rel_root = root.relative_to(self.repo_path)
+            rel_root = root.relative_to(self.input_dir)
             if self.verbose:
                 if self.count_tokens:
                     click.echo(
@@ -361,12 +375,12 @@ class DocGenerator:
                 else:
                     click.echo(f"[{current_dir}/{total_dirs}] Processing {rel_root}")
 
-            is_repo_root = resolved_root == resolved_repo_path
-
             files = [root / f for f in files if (root / f).resolve() in filtered_files]
 
             prompt = self._build_prompt(root, files, generated_readmes)
-            system_prompt = self._build_system_prompt(is_repo_root)
+            system_prompt = self._build_system_prompt(
+                resolved_root == self.resolved_repo_dir
+            )
 
             response = self._prompt_with_backoff(
                 prompt,
@@ -384,15 +398,10 @@ class DocGenerator:
                     )
                     return
 
-            readme_path = self.docs_path / rel_root / "README.md"
+            readme_path = self.docs_dir / rel_root / "README.md"
             readme_path.parent.mkdir(parents=True, exist_ok=True)
-            dir_name = (
-                resolved_repo_path.name
-                if is_repo_root
-                else self._forward_slash_path(root.relative_to(self.repo_path))
-            )
             readme_path.write_text(
-                f"# {dir_name}\n\n{response.text()}", encoding="utf-8"
+                f"# {resolved_root.name}\n\n{response.text()}", encoding="utf-8"
             )
 
             # Store the generated README
@@ -401,7 +410,7 @@ class DocGenerator:
 
     def write_mkdocs_configuration(self) -> None:
         config_template = textwrap.dedent("""\
-            site_name: {repo_name} docs by repo-guide
+            site_name: {input_dir_name} docs by repo-guide
             theme: material
             exclude_docs: |
                 !.*
@@ -417,7 +426,7 @@ class DocGenerator:
                 """)
         config_content = textwrap.dedent(
             config_template.format(
-                repo_name=self.repo_path.resolve().name, repo_url=self.repo_url
+                input_dir_name=self.input_dir.resolve().name, repo_url=self.repo_url
             )
         )
         hooks_content = textwrap.dedent("""\
@@ -427,10 +436,10 @@ class DocGenerator:
             def on_page_content(html, **kwargs):
                 return bleach.clean(html, markdown_tags, markdown_attrs)
             """)
-        Path(self.output_path / "mkdocs.yml").write_text(
+        Path(self.output_dir / "mkdocs.yml").write_text(
             config_content, encoding="utf-8"
         )
-        Path(self.output_path / "my_hooks.py").write_text(
+        Path(self.output_dir / "my_hooks.py").write_text(
             hooks_content, encoding="utf-8"
         )
 
@@ -438,7 +447,7 @@ class DocGenerator:
 @click.command()
 @click.version_option()
 @click.argument(
-    "repo_dir",
+    "input_dir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
 )
 @click.option(
@@ -529,7 +538,7 @@ class DocGenerator:
     ),
 )
 def cli(
-    repo_dir: Path,
+    input_dir: Path,
     model: str,
     serve: bool,
     open: bool,
@@ -548,7 +557,7 @@ def cli(
 ) -> None:
     "Uses AI to help understand repositories and their changes."
     generator = DocGenerator(
-        repo_dir,
+        input_dir,
         output_dir,
         model,
         count_tokens,
@@ -560,8 +569,8 @@ def cli(
     )
 
     # Create docs directory and write mkdocs config
-    docs_path = output_dir / "docs"
-    docs_path.mkdir(parents=True, exist_ok=True)
+    docs_dir = output_dir / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
     generator.write_mkdocs_configuration()
 
     # Start server if requested
@@ -584,8 +593,8 @@ def cli(
 
     if gen:
         # Only remove existing docs if not resuming
-        if not resume and docs_path.exists():
-            for item in docs_path.iterdir():
+        if not resume and docs_dir.exists():
+            for item in docs_dir.iterdir():
                 if item.is_dir():
                     shutil.rmtree(item)
                 else:
@@ -607,7 +616,7 @@ def cli(
                 click.echo("Unable to count tokens. Add --no-count-tokens to disable.")
 
     # If we're serving but not generating, verify docs exist
-    elif serve and not any(docs_path.iterdir()):
+    elif serve and not any(docs_dir.iterdir()):
         click.echo("Warning: No documentation found in output directory.")
         click.echo(
             "The server is running but you may want to use --gen to generate docs."
