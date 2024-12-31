@@ -221,7 +221,26 @@ class DocGenerator:
                 content = self._safe_read_file(f)
                 if content is not None:
                     if self.files_token_limit:
-                        file_tokens = len(self.token_encoding.encode(content))  # type: ignore
+                        # Tokens average 4 characters. If the number of characters
+                        # exceeds the limit by 10x, we skip the expensive tokenization.
+                        if (
+                            total_file_tokens + len(content) / 10
+                            > self.files_token_limit
+                        ):
+                            click.echo(
+                                f"\nTruncating <files> in {root} due to --files-token-limit."
+                            )
+                            break
+                        try:
+                            file_tokens = len(self.token_encoding.encode(content))  # type: ignore
+                        except BaseException as e:
+                            # See https://github.com/openai/tiktoken/issues/15
+                            if "StackOverflow" in str(e):
+                                click.echo(
+                                    f"\nTokenization error in {f}: {e}. Skipping file."
+                                )
+                                continue
+                            raise
                         if total_file_tokens + file_tokens > self.files_token_limit:
                             click.echo(
                                 f"\nTruncating <files> in {root} due to --files-token-limit."
@@ -258,6 +277,7 @@ class DocGenerator:
             "Focus on the subdirectories and files that are most important or interesting. Describe how they work together. "
             "If a large group of files or subdirectories do something similar, provide a summary for the group instead of summarizing each one. "
             "Refer to any <file> or <subdirectory> by its <path> and hyperlink it to its <link_url> without modification. "
+            "Only link to absolute URLs within <readme> content. Do not link to relative paths except when provided by <link_url>."
             "Output Markdown compatible with John Gruber's reference implementation, for use in MkDocs. "
             "For example, always add a blank line before a list. "
             'Do not refer to the XML tags used to describe the input (e.g. "<current_directory>") in your response. '
