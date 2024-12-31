@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 # Try to import magika, set to None if not available
 try:
-    from magika import Magika
+    from magika import Magika  # type: ignore
 except ImportError:
     Magika = None
 
