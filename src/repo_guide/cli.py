@@ -35,6 +35,7 @@ class DocGenerator:
         token_budget: int = 0,
         use_magika: bool = False,
         files_token_limit: int = 0,
+        write_gitignore: bool = True,
     ) -> None:
         self.input_dir = input_dir
         self.output_dir = output_dir
@@ -53,6 +54,7 @@ class DocGenerator:
         self.token_budget = token_budget
         self.use_magika = use_magika
         self.files_token_limit = files_token_limit
+        self.write_gitignore = write_gitignore
         # Encoding used by gpt-4o.
         self.token_encoding = (
             tiktoken.get_encoding("o200k_base") if files_token_limit else None
@@ -267,17 +269,19 @@ class DocGenerator:
 
     def _build_system_prompt(self, is_repo_root: bool) -> str:
         parts = [
-            "You are a principal software engineer. Your responses will be used to build a field guide to a code repository. "
-            "Analyze the provided XML and explain what <current_directory> does in Markdown. "
+            "You are a principal software engineer. Your responses will be used to build a guide to a code repository. "
+            "Analyze the provided XML and explain (in Markdown) what <current_directory> does and how it works. "
+            "\n\n"
             "The <current_directory> <path> is relative to the path to the repo. "
             "The <subdirectories> tag contains subdirectories of <current_directory>, each in its own <subdirectory> tag with <path>, <link_url>, and <readme>. "
-            "Each <readme> is a doc that you previously authored for the field guide. "
+            "Each <readme> is a doc that you previously authored that will be included in the guide you are adding to. "
             "The <files> tag contains files in the current directory, each in its own <file> tag with <path>, <link_url>, and <content>. "
             "Each <subdirectory> <path> and <file> <path> is relative to <current_directory> <path>. "
             "Focus on the subdirectories and files that are most important or interesting. Describe how they work together. "
             "If a large group of files or subdirectories do something similar, provide a summary for the group instead of summarizing each one. "
             "Refer to any <file> or <subdirectory> by its <path> and hyperlink it to its <link_url> without modification. "
-            "Only link to absolute URLs within <readme> content. Do not link to relative paths except when provided by <link_url>."
+            "Only link to absolute URLs within <readme> content. Do not link to relative paths except when provided by <link_url>. "
+            "\n\n"
             "Output Markdown compatible with John Gruber's reference implementation, for use in MkDocs. "
             "For example, always add a blank line before a list. "
             'Do not refer to the XML tags used to describe the input (e.g. "<current_directory>") in your response. '
@@ -429,6 +433,9 @@ class DocGenerator:
         click.echo("Documentation generation complete.")
 
     def write_mkdocs_configuration(self) -> None:
+        if self.write_gitignore:
+            Path(self.output_dir / ".gitignore").write_text("*\n", encoding="utf-8")
+
         config_template = textwrap.dedent("""\
             site_name: {input_dir_name} docs by repo-guide
             theme: material
@@ -478,7 +485,7 @@ class DocGenerator:
 )
 @click.option(
     "--model",
-    default="gemini-2.0-flash-exp",
+    default="gemini-1.5-flash-latest",
     show_default=True,
     help="LLM model to use",
 )
@@ -520,7 +527,7 @@ class DocGenerator:
 @click.option(
     "--ignore",
     multiple=True,
-    help="Pattern to ignore (may be specified multiple times)",
+    help="File name pattern to ignore (may be specified multiple times)",
 )
 @click.option(
     "--resume/--no-resume",
@@ -541,21 +548,30 @@ class DocGenerator:
     "--token-budget",
     type=int,
     default=0,
-    help="Maximum number of tokens to use (0 for unlimited)",
+    show_default=True,
+    help="Approximate maximum number of tokens to use (0 for unlimited).",
 )
 @click.option(
     "--magika/--no-magika",
     default=False,
-    help="Use magika to filter binary files. Requires 'magika' extra.",
+    show_default=True,
+    help="Use magika to filter binary files instead of git metadata. Requires 'magika' extra.",
 )
 @click.option(
     "--files-token-limit",
     type=int,
     default=0,
+    show_default=True,
     help=(
         "Maximum number of tokens for total file contents in a directory "
         "(0 for unlimited). Truncate file list if exceeded."
     ),
+)
+@click.option(
+    "--write-gitignore/--no-write-gitignore",
+    default=True,
+    show_default=True,
+    help="Write .gitignore file to output directory to ignore generated files.",
 )
 def cli(
     input_dir: Path,
@@ -574,8 +590,9 @@ def cli(
     token_budget: int,
     magika: bool,
     files_token_limit: int,
+    write_gitignore: bool,
 ) -> None:
-    "Uses AI to help understand repositories and their changes."
+    "Use AI to generate guides to code repositories."
     generator = DocGenerator(
         input_dir,
         output_dir,
@@ -586,6 +603,7 @@ def cli(
         token_budget=token_budget,
         use_magika=magika,
         files_token_limit=files_token_limit,
+        write_gitignore=write_gitignore,
     )
 
     # Create docs directory and write mkdocs config
