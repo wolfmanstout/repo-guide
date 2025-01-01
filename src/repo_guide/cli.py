@@ -36,6 +36,7 @@ class DocGenerator:
         use_magika: bool = False,
         files_token_limit: int = 0,
         write_gitignore: bool = True,
+        custom_instructions: str = "",
     ) -> None:
         self.input_dir = input_dir
         self.output_dir = output_dir
@@ -55,6 +56,7 @@ class DocGenerator:
         self.use_magika = use_magika
         self.files_token_limit = files_token_limit
         self.write_gitignore = write_gitignore
+        self.custom_instructions = custom_instructions
         # Encoding used by gpt-4o.
         self.token_encoding = (
             tiktoken.get_encoding("o200k_base") if files_token_limit else None
@@ -289,9 +291,11 @@ class DocGenerator:
         ]
         if is_repo_root:
             parts.append(
-                "Begin with an overall description of the repository. List the "
+                "\n\nBegin with an overall description of the repository. List the "
                 "dependencies and how they are used."
             )
+        if self.custom_instructions:
+            parts.append("\n\n" + self.custom_instructions)
         return " ".join(parts)
 
     def load_existing_docs(self) -> dict[Path, str]:
@@ -573,6 +577,16 @@ class DocGenerator:
     show_default=True,
     help="Write .gitignore file to output directory to ignore generated files.",
 )
+@click.option(
+    "--custom-instructions",
+    default="",
+    help="Custom instructions to append to the system prompt",
+)
+@click.option(
+    "--custom-instructions-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="File containing custom instructions to append to the system prompt",
+)
 def cli(
     input_dir: Path,
     model: str,
@@ -591,8 +605,17 @@ def cli(
     magika: bool,
     files_token_limit: int,
     write_gitignore: bool,
+    custom_instructions: str,
+    custom_instructions_file: Path | None,
 ) -> None:
     "Use AI to generate guides to code repositories."
+    if custom_instructions_file:
+        if custom_instructions:
+            raise click.UsageError(
+                "Only one of --custom-instructions and --custom-instructions-file may be specified"
+            )
+        custom_instructions = custom_instructions_file.read_text(encoding="utf-8")
+
     generator = DocGenerator(
         input_dir,
         output_dir,
@@ -604,6 +627,7 @@ def cli(
         use_magika=magika,
         files_token_limit=files_token_limit,
         write_gitignore=write_gitignore,
+        custom_instructions=custom_instructions,
     )
 
     # Create docs directory and write mkdocs config
