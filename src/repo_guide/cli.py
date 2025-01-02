@@ -37,10 +37,12 @@ class DocGenerator:
         files_token_limit: int = 0,
         write_gitignore: bool = True,
         custom_instructions: str = "",
+        rename_dot_github: bool = False,
     ) -> None:
         self.input_dir = input_dir
         self.output_dir = output_dir
         self.docs_dir = output_dir / "docs"
+        self.rename_dot_github = rename_dot_github
         self.repo = git.Repo(input_dir, search_parent_directories=True)
         self.resolved_repo_dir = Path(self.repo.working_dir).resolve()
         self.repo_relative_input_dir = self.input_dir.resolve().relative_to(
@@ -213,7 +215,17 @@ class DocGenerator:
                 root_rel_path = self._forward_slash_path(d.relative_to(root))
                 prompt_parts.append("<subdirectory>")
                 prompt_parts.append(f"<path>{root_rel_path}</path>")
-                prompt_parts.append(f"<link_url>{root_rel_path}/README.md</link_url>")
+                if self.rename_dot_github:
+                    parts = [
+                        "_github" if p == ".github" else p
+                        for p in d.relative_to(root).parts
+                    ]
+                    renamed_rel_path = self._forward_slash_path(Path(*parts))
+                else:
+                    renamed_rel_path = root_rel_path
+                prompt_parts.append(
+                    f"<link_url>{renamed_rel_path}/README.md</link_url>"
+                )
                 prompt_parts.append(f"<readme>\n{generated_readmes[d]}\n</readme>")
                 prompt_parts.append("</subdirectory>")
             prompt_parts.append("</subdirectories>\n")
@@ -306,6 +318,10 @@ class DocGenerator:
 
         for readme in self.docs_dir.rglob("README.md"):
             rel_path = readme.parent.relative_to(self.docs_dir)
+            if self.rename_dot_github:
+                # Reverse the mapping.
+                parts = [".github" if p == "_github" else p for p in rel_path.parts]
+                rel_path = Path(*parts)
             source_path = self.input_dir / rel_path
             if source_path.exists():
                 generated_readmes[source_path] = readme.read_text()
@@ -426,7 +442,12 @@ class DocGenerator:
                     )
                     return
 
-            readme_path = self.docs_dir / rel_root / "README.md"
+            if self.rename_dot_github:
+                parts = ["_github" if p == ".github" else p for p in rel_root.parts]
+                renamed_rel_root = Path(*parts)
+            else:
+                renamed_rel_root = rel_root
+            readme_path = self.docs_dir / renamed_rel_root / "README.md"
             readme_path.parent.mkdir(parents=True, exist_ok=True)
             readme_path.write_text(
                 f"# {resolved_root.name}\n\n{response.text()}", encoding="utf-8"
@@ -587,6 +608,11 @@ class DocGenerator:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="File containing custom instructions to append to the system prompt",
 )
+@click.option(
+    "--rename-dot-github",
+    is_flag=True,
+    help="Rename .github directory to _github in generated docs to avoid GitHub Pages issues",
+)
 def cli(
     input_dir: Path,
     model: str,
@@ -607,6 +633,7 @@ def cli(
     write_gitignore: bool,
     custom_instructions: str,
     custom_instructions_file: Path | None,
+    rename_dot_github: bool,
 ) -> None:
     "Use AI to generate guides to code repositories."
     if custom_instructions_file:
@@ -628,6 +655,7 @@ def cli(
         files_token_limit=files_token_limit,
         write_gitignore=write_gitignore,
         custom_instructions=custom_instructions,
+        rename_dot_github=rename_dot_github,
     )
 
     # Create docs directory and write mkdocs config
