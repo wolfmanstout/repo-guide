@@ -5,7 +5,6 @@ import threading
 import time
 import webbrowser
 from collections.abc import Sequence
-from datetime import datetime
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -114,63 +113,6 @@ class DocGenerator:
                     click.echo(f"Model error: {e}. Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
         raise AssertionError("Unreachable code")
-
-    def get_recent_changes(self, num_commits: int = 5) -> list[dict]:
-        commits = list(self.repo.iter_commits("main", max_count=num_commits))
-        changes = []
-
-        for commit in commits:
-            # Get the diff for this commit
-            diff = (
-                commit.parents[0].diff(commit)
-                if commit.parents
-                else commit.diff(git.NULL_TREE)
-            )
-
-            # Extract modified files and their diffs (truncated)
-            files_changed = []
-            for d in diff:
-                if d.a_path:
-                    try:
-                        # Get truncated diff content
-                        diff_content = d.diff.decode("utf-8")[
-                            :500
-                        ]  # Truncate long diffs
-                        files_changed.append({"path": d.a_path, "diff": diff_content})
-                    except Exception as e:
-                        print(f"Error processing diff for {d.a_path}: {e}")
-                        continue
-
-            changes.append(
-                {
-                    "hash": commit.hexsha[:8],
-                    "message": commit.message,
-                    "author": commit.author.name,
-                    "date": datetime.fromtimestamp(commit.committed_date),
-                    "files": files_changed,
-                }
-            )
-
-        return changes
-
-    def generate_changelog(self, changes: list[dict]) -> str:
-        # Start a conversation for maintaining context
-        response = self._prompt_with_backoff(
-            """Generate a detailed changelog entry for the following git commits.
-            Focus on user-facing changes and group similar changes together.
-            Format the output in markdown with appropriate headers and bullet points.
-
-            Commit details:
-            """
-            + str(changes),
-            system="You are a technical writer creating clear, organized changelog entries.",
-        )
-
-        if self.count_tokens:
-            self.total_tokens += response.usage().input or 0
-            self.total_tokens += response.usage().output or 0
-
-        return response.text()
 
     def _safe_read_file(self, file_path: Path) -> str | None:
         """Safely read file content, handling encoding errors."""
@@ -544,12 +486,6 @@ class DocGenerator:
     help="Output directory for generated documentation",
 )
 @click.option(
-    "--include-changelog/--no-include-changelog",
-    default=False,
-    show_default=True,
-    help="Generate changelog from recent commits",
-)
-@click.option(
     "--ignore",
     multiple=True,
     help="File name pattern to ignore (may be specified multiple times)",
@@ -622,7 +558,6 @@ def cli(
     gen: bool,
     count_tokens: bool,
     output_dir: Path,
-    include_changelog: bool,
     ignore: tuple[str, ...],
     resume: bool,
     public: bool,
@@ -692,12 +627,6 @@ def cli(
 
         # Generate documentation
         generator.generate_docs(resume=resume)
-
-        # Generate changelog only if requested
-        if include_changelog:
-            changes = generator.get_recent_changes()
-            changelog = generator.generate_changelog(changes)
-            Path(output_dir / "docs/CHANGELOG.md").write_text(changelog)
 
         if count_tokens:
             if generator.total_tokens:
