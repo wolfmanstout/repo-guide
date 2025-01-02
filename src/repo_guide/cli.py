@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 import git
+import git.exc
 import llm
 import tiktoken
 from mkdocs.commands.serve import serve as mkdocs_serve
@@ -76,19 +77,25 @@ class DocGenerator:
                 .replace(".com:", ".com/")
             )
             if "github.com" in self.repo_url:
-                current_branch = None
+                branch_or_tag = None
                 try:
-                    current_branch = self.repo.active_branch.name
+                    branch_or_tag = self.repo.active_branch.name
                 except TypeError:
-                    click.echo("Unable to determine current branch")
-                if current_branch:
+                    # Try to find a matching tag instead.
+                    try:
+                        branch_or_tag = self.repo.git.describe(
+                            tags=True, exact_match=True
+                        )
+                    except git.exc.GitCommandError:
+                        click.echo("Unable to determine current branch or tag")
+                if branch_or_tag:
                     repo_subdir_str = (
                         self._forward_slash_path(self.repo_relative_input_dir) + "/"
                         if self.repo_relative_input_dir != Path(".")
                         else ""
                     )
                     self.repo_url_file_prefix = (
-                        f"{self.repo_url}/blob/{current_branch}/{repo_subdir_str}"
+                        f"{self.repo_url}/blob/{branch_or_tag}/{repo_subdir_str}"
                     )
         if not self.repo_url:
             click.echo("Unable to determine repository URL")
