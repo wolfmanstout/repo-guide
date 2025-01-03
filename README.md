@@ -36,6 +36,12 @@ LLM command-line tool](https://llm.datasette.io/) and use [`llm keys set
 gemini`](https://llm.datasette.io/en/stable/setup.html#saving-and-using-stored-keys)
 to store your key in a configuration file.
 
+**DISCLAIMER**: LLM API calls may cost money. Although this tool displays token
+counts and provides methods to limit token usage, you are ultimately responsible
+for any costs incurred, including costs that may be higher than expected due to
+bugs in this tool. Consider setting hard limits or other protections in your API
+accounts where possible.
+
 ## Usage
 
 This tool currently only supports Git repositories and their subdirectories,
@@ -80,8 +86,7 @@ Here are some of the most common flags you may want to use:
   set, as supported by [simonw/llm](https://github.com/simonw/llm) and
   [simonw/llm-gemini](https://github.com/simonw/llm-gemini).
 - `--token-budget`: Sets an approximate token budget to avoid overspending.
-  Please also consider setting limits in your account. I'm not responsible for
-  any unexpected costs, including due to bugs in this tool.
+  Tokens are counted after each LLM call, so the actual number may be higher.
 
 For a full description of command line flags, run:
 

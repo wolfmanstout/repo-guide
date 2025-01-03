@@ -517,7 +517,10 @@ class DocGenerator:
     type=int,
     default=0,
     show_default=True,
-    help="Approximate maximum number of tokens to use (0 for unlimited).",
+    help=(
+        "Approximate maximum number of tokens to use (0 for unlimited). Tokens are "
+        "counted after each LLM call, so the actual number may be higher."
+    ),
 )
 @click.option(
     "--magika/--no-magika",
