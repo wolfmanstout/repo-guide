@@ -60,7 +60,13 @@ If you kill the server and need to restart it later, by default it will reuse
 any previously-generated Markdown files, so you can simply rerun the same
 command. You can also add `--no-resume` to delete and regenerate the files, or
 `--no-gen` to explicitly disable doc generation (e.g. even if a new directory
-has been added).
+has been added). Alternatively, you can add `--no-serve` when building the guide
+and run [MkDocs](https://www.mkdocs.org/) directly to host the files. You'll
+need to install MkDocs and the necessary dependencies (e.g. with `uv tool
+install mkdocs --with mkdocs-material,bleach,bleach-allowlist`) then run `mkdocs
+serve -f generated_docs/mkdocs.yml`. With this approach, you can also [deploy
+the docs to other hosting
+platforms](https://www.mkdocs.org/user-guide/deploying-your-docs/#deploying-your-docs).
 
 Here are some of the most common flags you may want to use:
 
@@ -95,8 +101,9 @@ If the command fails either due to an error or hitting the token budget, simply
 rerun the command and it will resume (unless `--no-resume` is applied). Most
 common model errors (e.g. rate-limiting) should be automatically retried with
 exponential backoff. You can `--ignore` large generated or binary files that
-aren't automatically filtered out. If you still hit the model token limit, try
-setting `--files-token-limit`.
+aren't automatically filtered out (the tool automatically respects `.gitignore`
+files and ignores files annotated in `git ls-files --eol` as non-text). If you
+still hit the model token limit, try setting `--files-token-limit`.
 
 LLMs are unpredictable, and the generated Markdown may contain errors and broken
 links. The system prompt tries to mitigate common issues, but they happen
