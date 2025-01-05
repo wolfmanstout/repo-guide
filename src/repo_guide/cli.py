@@ -38,6 +38,7 @@ class DocGenerator:
         write_gitignore: bool = True,
         custom_instructions: str = "",
         rename_dot_github: bool = False,
+        google_analytics_id: str = "",
     ) -> None:
         self.input_dir = input_dir
         self.output_dir = output_dir
@@ -59,6 +60,7 @@ class DocGenerator:
         self.files_token_limit = files_token_limit
         self.write_gitignore = write_gitignore
         self.custom_instructions = custom_instructions
+        self.google_analytics_id = google_analytics_id
         # Encoding used by gpt-4o.
         self.token_encoding = (
             tiktoken.get_encoding("o200k_base") if files_token_limit else None
@@ -425,9 +427,18 @@ class DocGenerator:
                 repo_url: {repo_url}
                 edit_uri:
                 """)
+        if self.google_analytics_id:
+            config_template += textwrap.dedent("""\
+                extra:
+                  analytics:
+                    provider: google
+                    property: {google_analytics_id}
+                """)
         config_content = textwrap.dedent(
             config_template.format(
-                input_dir_name=self.input_dir.resolve().name, repo_url=self.repo_url
+                input_dir_name=self.input_dir.resolve().name,
+                repo_url=self.repo_url,
+                google_analytics_id=self.google_analytics_id,
             )
         )
         hooks_content = textwrap.dedent("""\
@@ -559,6 +570,11 @@ class DocGenerator:
     is_flag=True,
     help="Rename .github directory to _github in generated docs to avoid GitHub Pages issues",
 )
+@click.option(
+    "--google-analytics-id",
+    default="",
+    help="Google Analytics ID to add to the MkDocs configuration",
+)
 def cli(
     input_dir: Path,
     model: str,
@@ -579,6 +595,7 @@ def cli(
     custom_instructions: str,
     custom_instructions_file: Path | None,
     rename_dot_github: bool,
+    google_analytics_id: str,
 ) -> None:
     "Use AI to generate guides to code repositories."
     if custom_instructions_file:
@@ -601,6 +618,7 @@ def cli(
         write_gitignore=write_gitignore,
         custom_instructions=custom_instructions,
         rename_dot_github=rename_dot_github,
+        google_analytics_id=google_analytics_id,
     )
 
     # Create docs directory and write mkdocs config
