@@ -1,6 +1,6 @@
 [project]
 name = "repo-guide"
-version = "0.5.2"
+version = "0.5.0"
 description = "Uses AI to help understand repositories and their changes."
 readme = "README.md"
 authors = [{name = "James Stout"}]
