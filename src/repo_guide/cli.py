@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import textwrap
 import threading
@@ -77,8 +78,8 @@ class DocGenerator:
         )
         if origin:
             self.repo_url = (
-                origin.url.replace(".git", "")
-                .replace("git@", "https://")
+                re.sub(r"^[^@:/]+@", "https://", origin.url)
+                .replace(".git", "")
                 .replace(".com:", ".com/")
             )
             if "github.com" in self.repo_url:

@@ -202,6 +202,32 @@ def test_repo_url_with_subdirectory(test_repo: Path, tmp_path: Path) -> None:
     )
 
 
+def test_ssh_org_repo_url(test_repo: Path, tmp_path: Path) -> None:
+    """Test SSH-style repo URL parsing."""
+    repo = git.Repo(test_repo)
+    # Change origin URL to SSH format
+    repo.delete_remote(repo.remotes.origin)
+    repo.create_remote(
+        "origin", "org-14957082@github.com:openai/openai-realtime-solar-system.git"
+    )
+
+    generator = DocGenerator(
+        input_dir=test_repo,
+        output_dir=tmp_path / "output",
+        model_name="",
+        count_tokens=False,
+        ignore_patterns=[],
+    )
+
+    assert (
+        generator.repo_url == "https://github.com/openai/openai-realtime-solar-system"
+    )
+    assert (
+        generator.repo_url_file_prefix
+        == "https://github.com/openai/openai-realtime-solar-system/blob/main/"
+    )
+
+
 @pytest.fixture
 def mock_model(monkeypatch):
     """Mock LLM model that returns truncated input as response."""
