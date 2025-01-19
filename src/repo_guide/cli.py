@@ -13,7 +13,10 @@ import git
 import git.exc
 import llm
 import tiktoken
+from mkdocs.commands.build import build as mkdocs_build
+from mkdocs.commands.gh_deploy import gh_deploy as mkdocs_gh_deploy
 from mkdocs.commands.serve import serve as mkdocs_serve
+from mkdocs.config import load_config
 from tqdm import tqdm
 
 # Try to import magika, set to None if not available
@@ -575,6 +578,16 @@ class DocGenerator:
     default="",
     help="Google Analytics ID to add to the MkDocs configuration",
 )
+@click.option(
+    "--build",
+    is_flag=True,
+    help="Build static site from generated guide",
+)
+@click.option(
+    "--gh-deploy",
+    is_flag=True,
+    help="Deploy generated guide to GitHub Pages",
+)
 def cli(
     input_dir: Path,
     model: str,
@@ -596,6 +609,8 @@ def cli(
     custom_instructions_file: Path | None,
     rename_dot_github: bool,
     google_analytics_id: str,
+    build: bool,
+    gh_deploy: bool,
 ) -> None:
     "Use AI to generate guides to code repositories."
     if custom_instructions_file:
@@ -604,6 +619,10 @@ def cli(
                 "Only one of --custom-instructions and --custom-instructions-file may be specified"
             )
         custom_instructions = custom_instructions_file.read_text(encoding="utf-8")
+
+    if gh_deploy:
+        rename_dot_github = True
+        click.echo("Enabling --rename-dot-github for GitHub Pages deployment.")
 
     generator = DocGenerator(
         input_dir,
@@ -620,6 +639,13 @@ def cli(
         rename_dot_github=rename_dot_github,
         google_analytics_id=google_analytics_id,
     )
+
+    if gh_deploy and not Path.cwd().resolve().is_relative_to(
+        generator.resolved_repo_dir
+    ):
+        raise click.ClickException(
+            "The current directory must be within the repository to deploy to GitHub Pages."
+        )
 
     # Create docs directory and write mkdocs config
     docs_dir = output_dir / "docs"
@@ -668,6 +694,33 @@ def cli(
         click.echo(
             "The server is running but you may want to use --gen to generate docs."
         )
+
+    # If we're building or deploying but not generating, verify docs exist
+    elif (build or gh_deploy) and not any(docs_dir.iterdir()):
+        raise click.ClickException(
+            "No documentation found in output directory to build or deploy."
+        )
+
+    if build:
+        click.echo("Building static site...")
+        config = load_config(str(output_dir / "mkdocs.yml"))
+        config.plugins.on_startup(command="build", dirty=False)
+        try:
+            mkdocs_build(config)
+        finally:
+            config.plugins.on_shutdown()
+        click.echo("Build complete.")
+
+    if gh_deploy:
+        click.echo("Building and deploying to GitHub Pages...")
+        config = load_config(str(output_dir / "mkdocs.yml"))
+        config.plugins.on_startup(command="gh-deploy", dirty=False)
+        try:
+            mkdocs_build(config)
+        finally:
+            config.plugins.on_shutdown()
+        mkdocs_gh_deploy(config=config, force=True)
+        click.echo("Deployment complete.")
 
     # If serving, keep the main thread alive
     if server_thread:

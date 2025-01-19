@@ -48,9 +48,7 @@ jobs:
             mkdocs-material-
       - name: Install the project
         run: uv sync --dev
-      - name: Build the docs
+      - name: Build and deploy the docs
         env:
           LLM_GEMINI_KEY: ${{ secrets.LLM_GEMINI_KEY }}
-        run: uv run repo-guide . -v --ignore=uv.lock --model=gemini-2.0-flash-exp --no-serve --rename-dot-github --google-analytics-id=G-8S5FQCP6K4
-      - name: Deploy the docs
-        run: uv run mkdocs gh-deploy --force -f generated_docs/mkdocs.yml
+        run: uv run repo-guide . --gh-deploy --no-serve -v --ignore=uv.lock --model=gemini-2.0-flash-exp --google-analytics-id=G-8S5FQCP6K4
