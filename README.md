@@ -82,10 +82,10 @@ If you wish to deploy the generated guide, add either `--build` or
 `generated_docs/site` that you can copy to any host, and the latter will build
 and deploy to GitHub Pages, as described by MkDocs documentation: [Deploying
 your docs](https://www.mkdocs.org/user-guide/deploying-your-docs/). For example,
-you can fork a repo, then run `cd my_fork && repo-guide . --gh-deploy` to deploy
-to your fork's GitHub Pages (https://username.github.io/my_fork). The first time
-you do this, you will also need to navigate to your fork's settings on GitHub,
-click Pages, then choose "Deploy from branch" and "gh-pages" as the branch.
+you can fork a repo, then run `repo-guide my_fork --gh-deploy` to deploy to your
+fork's GitHub Pages (https://username.github.io/my_fork). The first time you do
+this, you will also need to navigate to your fork's settings on GitHub, click
+Pages, then choose "Deploy from branch" and "gh-pages" as the branch.
 
 If you wish to customize MkDocs flags used for serving or deploying your guide,
 you can add `--no-serve` when building the guide and run MkDocs commands

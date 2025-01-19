@@ -1,6 +1,8 @@
 import os
 import re
 import shutil
+import subprocess
+import sys
 import textwrap
 import threading
 import time
@@ -14,10 +16,6 @@ import git
 import git.exc
 import llm
 import tiktoken
-from mkdocs.commands.build import build as mkdocs_build
-from mkdocs.commands.gh_deploy import gh_deploy as mkdocs_gh_deploy
-from mkdocs.commands.serve import serve as mkdocs_serve
-from mkdocs.config import load_config
 from tqdm import tqdm
 
 # Try to import magika, set to None if not available
@@ -641,13 +639,6 @@ def cli(
         google_analytics_id=google_analytics_id,
     )
 
-    if gh_deploy and not Path.cwd().resolve().is_relative_to(
-        generator.resolved_repo_dir
-    ):
-        raise click.ClickException(
-            "The current directory must be within the repository to deploy to GitHub Pages."
-        )
-
     # Create docs directory and write mkdocs config
     docs_dir = output_dir / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
@@ -656,15 +647,29 @@ def cli(
     # Start server if requested
     if open:
         serve = True
+
+    def _run_mkdocs_serve() -> None:
+        args = [
+            sys.executable,
+            "-m",
+            "mkdocs",
+            "serve",
+            "-f",
+            str(output_dir / "mkdocs.yml"),
+            "--dev-addr",
+            f"{host}:{port}",
+        ]
+        if not verbose:
+            args.append("--quiet")
+        subprocess.run(args, check=True)
+
     server_thread = None
     if serve:
         url = f"http://127.0.0.1:{port}/"
         click.echo(f"Starting docs server at {url}" + (" (public)" if public else ""))
         host = "0.0.0.0" if public else "127.0.0.1"
         server_thread = threading.Thread(
-            target=mkdocs_serve,
-            args=(f"{output_dir}/mkdocs.yml",),
-            kwargs={"dev_addr": f"{host}:{port}", "livereload": True},
+            target=_run_mkdocs_serve,
             daemon=True,
         )
         server_thread.start()
@@ -704,23 +709,34 @@ def cli(
 
     if build:
         click.echo("Building static site...")
-        config = load_config(str(output_dir / "mkdocs.yml"))
-        config.plugins.on_startup(command="build", dirty=False)
-        try:
-            mkdocs_build(config)
-        finally:
-            config.plugins.on_shutdown()
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "mkdocs",
+                "build",
+                "-f",
+                str(output_dir / "mkdocs.yml"),
+            ],
+            check=True,
+        )
         click.echo("Build complete.")
 
     if gh_deploy:
         click.echo("Building and deploying to GitHub Pages...")
-        config = load_config(str(output_dir / "mkdocs.yml"))
-        config.plugins.on_startup(command="gh-deploy", dirty=False)
-        try:
-            mkdocs_build(config)
-        finally:
-            config.plugins.on_shutdown()
-        mkdocs_gh_deploy(config=config, force=True)
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "mkdocs",
+                "gh-deploy",
+                "-f",
+                str(output_dir.resolve() / "mkdocs.yml"),
+                "--force",
+            ],
+            check=True,
+            cwd=generator.resolved_repo_dir,
+        )
         click.echo("Deployment complete.")
 
     # If serving, keep the main thread alive
