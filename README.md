@@ -101,11 +101,11 @@ Here are some of the most common flags you may want to use:
 - `--output-dir`: Change where the generated docs are written.
 - `-v` or `--verbose`: Prints details on doc generation progress instead of a
   progress bar.
-- `--model`: Sets the LLM model to use. As of 1/1/2025, the default is Gemini
-  1.5 Flash, which costs under a dollar for 10 million tokens and has a 1
-  million token context window, making it a great fit. You can try other Gemini
-  models such as `gemini-2.0-flash-exp`, or OpenAI models if `OPENAI_API_KEY` is
-  set, as supported by [simonw/llm](https://github.com/simonw/llm) and
+- `--model`: Sets the LLM model to use. As of 2/5/2025, the default is Gemini
+  2.0 Flash, which costs a dollar for 10 million tokens and has a 1 million
+  token context window, making it a great fit. You can try other Gemini models,
+  or OpenAI models if `OPENAI_API_KEY` is set, as supported by
+  [simonw/llm](https://github.com/simonw/llm) and
   [simonw/llm-gemini](https://github.com/simonw/llm-gemini).
 - `--token-budget`: Sets an approximate token budget to avoid overspending.
   Tokens are counted after each LLM call, so the actual number may be higher.

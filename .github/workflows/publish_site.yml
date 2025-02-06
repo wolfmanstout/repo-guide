@@ -51,4 +51,4 @@ jobs:
       - name: Build and deploy the docs
         env:
           LLM_GEMINI_KEY: ${{ secrets.LLM_GEMINI_KEY }}
-        run: uv run repo-guide . --gh-deploy --no-serve -v --ignore=uv.lock --model=gemini-2.0-flash-exp --google-analytics-id=G-8S5FQCP6K4
+        run: uv run repo-guide . --gh-deploy --no-serve -v --ignore=uv.lock --google-analytics-id=G-8S5FQCP6K4
