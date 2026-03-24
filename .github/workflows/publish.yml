@@ -14,13 +14,14 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Install uv
-      uses: astral-sh/setup-uv@v5
-    - name: Set up Python ${{ matrix.python-version }}
-      run: uv python install ${{ matrix.python-version }}
+      uses: astral-sh/setup-uv@v7
+      with:
+        python-version: ${{ matrix.python-version }}
+        enable-cache: true
     - name: Install the project
-      run: uv sync --dev
+      run: uv sync --locked --dev
     - name: Run tests
       run: uv run pytest
   deploy:
@@ -29,15 +30,16 @@ jobs:
     environment: release
     permissions:
       id-token: write
+      contents: read
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Install uv
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
     - name: Set up Python
       run: uv python install
-    - name: Install the project
-      run: uv sync --dev
     - name: Build
-      run: uv build
+      run: uv build --no-sources
     - name: Publish
-      uses: pypa/gh-action-pypi-publish@release/v1
+      run: uv publish
