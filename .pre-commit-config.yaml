@@ -10,11 +10,10 @@ repos:
       args: [ --fix ]
     # Run the formatter.
     - id: ruff-format
-- repo: https://github.com/RobertCraigie/pyright-python
-  rev: v1.1.402
+- repo: https://github.com/DetachHead/basedpyright-prek-mirror
+  rev: 1.39.3
   hooks:
-  - id: pyright
+  - id: basedpyright
 
 ci:
   autoupdate_schedule: monthly
-  skip: [pyright]
