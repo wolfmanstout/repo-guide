@@ -472,7 +472,7 @@ class DocGenerator:
 )
 @click.option(
     "--model",
-    default="gemini-2.0-flash",
+    default="gemini-3.5-flash",
     show_default=True,
     help="LLM model to use",
 )
