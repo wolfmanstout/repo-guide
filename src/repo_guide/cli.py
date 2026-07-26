@@ -236,23 +236,25 @@ class DocGenerator:
 
     def _build_system_prompt(self, is_repo_root: bool) -> str:
         parts = [
-            "You are a principal software engineer. Your responses will be used to build a guide to a code repository. "
-            "Analyze the provided XML and explain (in Markdown) what <current_directory> does and how it works. "
-            "\n\n"
-            "The <current_directory> <path> is relative to the path to the repo. "
-            "The <subdirectories> tag contains subdirectories of <current_directory>, each in its own <subdirectory> tag with <path>, <link_url>, and <readme>. "
-            "Each <readme> is a doc that you previously authored that will be included in the guide you are adding to. "
-            "The <files> tag contains files in the current directory, each in its own <file> tag with <path>, <link_url>, and <content>. "
-            "Each <subdirectory> <path> and <file> <path> is relative to <current_directory> <path>. "
-            "Focus on the subdirectories and files that are most important or interesting. Describe how they work together. "
-            "If a large group of files or subdirectories do something similar, provide a summary for the group instead of summarizing each one. "
-            "Refer to any <file> or <subdirectory> by its <path> and hyperlink it to its <link_url> without modification. "
-            "Only link to absolute URLs within <readme> content. Do not link to relative paths except when provided by <link_url>. "
-            "\n\n"
-            "Output Markdown compatible with John Gruber's reference implementation, for use in MkDocs. "
-            "For example, always add a blank line before a list. "
-            'Do not refer to the XML tags used to describe the input (e.g. "<current_directory>") in your response. '
-            "Omit heading level 1 (#) as it will be added automatically. "
+            (
+                "You are a principal software engineer. Your responses will be used to build a guide to a code repository. "
+                "Analyze the provided XML and explain (in Markdown) what <current_directory> does and how it works. "
+                "\n\n"
+                "The <current_directory> <path> is relative to the path to the repo. "
+                "The <subdirectories> tag contains subdirectories of <current_directory>, each in its own <subdirectory> tag with <path>, <link_url>, and <readme>. "
+                "Each <readme> is a doc that you previously authored that will be included in the guide you are adding to. "
+                "The <files> tag contains files in the current directory, each in its own <file> tag with <path>, <link_url>, and <content>. "
+                "Each <subdirectory> <path> and <file> <path> is relative to <current_directory> <path>. "
+                "Focus on the subdirectories and files that are most important or interesting. Describe how they work together. "
+                "If a large group of files or subdirectories do something similar, provide a summary for the group instead of summarizing each one. "
+                "Refer to any <file> or <subdirectory> by its <path> and hyperlink it to its <link_url> without modification. "
+                "Only link to absolute URLs within <readme> content. Do not link to relative paths except when provided by <link_url>. "
+                "\n\n"
+                "Output Markdown compatible with John Gruber's reference implementation, for use in MkDocs. "
+                "For example, always add a blank line before a list. "
+                'Do not refer to the XML tags used to describe the input (e.g. "<current_directory>") in your response. '
+                "Omit heading level 1 (#) as it will be added automatically. "
+            )
         ]
         if is_repo_root:
             parts.append(
@@ -293,11 +295,11 @@ class DocGenerator:
                 )
             magika = Magika()
             magika_results = magika.identify_paths(all_files)
-            filtered_files = set(
+            filtered_files = {
                 f
                 for f, r in zip(all_files, magika_results, strict=True)
                 if r.output.is_text or f.stat().st_size == 0
-            )
+            }
         else:
             # Use GitHub's eol attribute to filter out binary files
             is_binary_files = []
@@ -314,24 +316,24 @@ class DocGenerator:
                 else:
                     click.echo(f"Error parsing ls-files output: {line}")
                     is_binary_files.append(False)
-            filtered_files = set(
+            filtered_files = {
                 f
                 for f, is_binary in zip(all_files, is_binary_files, strict=True)
                 if not is_binary
-            )
-        filtered_files = set(
+            }
+        filtered_files = {
             f
             for f in filtered_files
             if not any(fnmatch(f.name, pattern) for pattern in self.ignore_patterns)
-        )
+        }
 
         resolved_input_dir = self.input_dir.resolve()
-        filtered_directories = set(
+        filtered_directories = {
             d
             for f in filtered_files
             for d in f.parents
             if d.is_relative_to(resolved_input_dir)
-        )
+        }
         generated_readmes = self.load_existing_docs() if resume else {}
         if generated_readmes:
             click.echo("Resuming documentation. To start fresh, use --no-resume.")
